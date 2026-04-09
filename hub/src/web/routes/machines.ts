@@ -12,7 +12,8 @@ const spawnBodySchema = z.object({
     modelReasoningEffort: z.string().optional(),
     yolo: z.boolean().optional(),
     sessionType: z.enum(['simple', 'worktree']).optional(),
-    worktreeName: z.string().optional()
+    worktreeName: z.string().optional(),
+    additionalParameters: z.array(z.string().min(1)).max(100).optional()
 })
 
 const pathsExistsSchema = z.object({
@@ -61,7 +62,8 @@ export function createMachinesRoutes(getSyncEngine: () => SyncEngine | null): Ho
             parsed.data.sessionType,
             parsed.data.worktreeName,
             undefined,
-            parsed.data.effort
+            parsed.data.effort,
+            parsed.data.additionalParameters
         )
         return c.json(result)
     })

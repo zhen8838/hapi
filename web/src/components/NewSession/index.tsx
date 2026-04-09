@@ -11,17 +11,25 @@ import { useRecentPaths } from '@/hooks/useRecentPaths'
 import { useTranslation } from '@/lib/use-translation'
 import type { AgentType, ClaudeEffort, CodexReasoningEffort, SessionType } from './types'
 import { ActionButtons } from './ActionButtons'
+import { AdditionalParametersSection } from './AdditionalParametersSection'
 import { AgentSelector } from './AgentSelector'
 import { DirectorySection } from './DirectorySection'
 import { MachineSelector } from './MachineSelector'
 import { ModelSelector } from './ModelSelector'
+import { ProfileSection } from './ProfileSection'
 import { ClaudeEffortSelector } from './ClaudeEffortSelector'
 import { ReasoningEffortSelector } from './ReasoningEffortSelector'
 import {
+    loadSelectedSessionProfileId,
+    loadSessionProfiles,
     loadPreferredAgent,
     loadPreferredYoloMode,
+    saveSelectedSessionProfileId,
+    saveSessionProfiles,
     savePreferredAgent,
     savePreferredYoloMode,
+    type SessionProfile,
+    type SessionProfileConfig,
 } from './preferences'
 import { SessionTypeSelector } from './SessionTypeSelector'
 import { YoloToggle } from './YoloToggle'
@@ -52,9 +60,44 @@ export function NewSession(props: {
     const [yoloMode, setYoloMode] = useState(loadPreferredYoloMode)
     const [sessionType, setSessionType] = useState<SessionType>('simple')
     const [worktreeName, setWorktreeName] = useState('')
+    const [additionalParameters, setAdditionalParameters] = useState<string[]>([])
+    const [profiles, setProfiles] = useState<SessionProfile[]>(() => loadSessionProfiles())
+    const [selectedProfileId, setSelectedProfileId] = useState<string | null>(() => loadSelectedSessionProfileId())
     const [directoryCreationConfirmed, setDirectoryCreationConfirmed] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const worktreeInputRef = useRef<HTMLInputElement>(null)
+    const skipAgentDefaultsRef = useRef(false)
+
+    const selectedProfile = useMemo(
+        () => profiles.find((profile) => profile.id === selectedProfileId) ?? null,
+        [profiles, selectedProfileId]
+    )
+
+    const currentProfileConfig = useCallback((): SessionProfileConfig => ({
+        agent,
+        model,
+        effort,
+        modelReasoningEffort,
+        yoloMode,
+        sessionType,
+        worktreeName,
+        additionalParameters: [...additionalParameters],
+    }), [additionalParameters, agent, effort, model, modelReasoningEffort, sessionType, worktreeName, yoloMode])
+
+    const applyProfile = useCallback((profile: SessionProfile | null) => {
+        if (!profile) {
+            return
+        }
+        skipAgentDefaultsRef.current = true
+        setAgent(profile.config.agent)
+        setModel(profile.config.model)
+        setEffort(profile.config.effort)
+        setModelReasoningEffort(profile.config.modelReasoningEffort)
+        setYoloMode(profile.config.yoloMode)
+        setSessionType(profile.config.sessionType)
+        setWorktreeName(profile.config.worktreeName)
+        setAdditionalParameters([...profile.config.additionalParameters])
+    }, [])
 
     useEffect(() => {
         if (sessionType === 'worktree') {
@@ -63,6 +106,10 @@ export function NewSession(props: {
     }, [sessionType])
 
     useEffect(() => {
+        if (skipAgentDefaultsRef.current) {
+            skipAgentDefaultsRef.current = false
+            return
+        }
         setModel('auto')
         setEffort('auto')
     }, [agent])
@@ -74,6 +121,25 @@ export function NewSession(props: {
     useEffect(() => {
         savePreferredYoloMode(yoloMode)
     }, [yoloMode])
+
+    useEffect(() => {
+        saveSessionProfiles(profiles)
+    }, [profiles])
+
+    useEffect(() => {
+        saveSelectedSessionProfileId(selectedProfileId)
+    }, [selectedProfileId])
+
+    useEffect(() => {
+        if (!selectedProfileId) {
+            return
+        }
+        if (!selectedProfile) {
+            setSelectedProfileId(null)
+            return
+        }
+        applyProfile(selectedProfile)
+    }, [applyProfile, selectedProfile, selectedProfileId])
 
     useEffect(() => {
         if (props.machines.length === 0) return
@@ -193,6 +259,61 @@ export function NewSession(props: {
         setDirectory(value)
     }, [])
 
+    const handleSelectProfile = useCallback((profileId: string | null) => {
+        setSelectedProfileId(profileId)
+    }, [])
+
+    const handleSaveProfileAsNew = useCallback(() => {
+        const name = window.prompt(t('newSession.profile.promptName'))
+        const trimmedName = name?.trim()
+        if (!trimmedName) {
+            return
+        }
+
+        const now = Date.now()
+        const profile: SessionProfile = {
+            id: crypto.randomUUID(),
+            name: trimmedName,
+            config: currentProfileConfig(),
+            createdAt: now,
+            updatedAt: now,
+        }
+
+        setProfiles((current) => [...current, profile])
+        setSelectedProfileId(profile.id)
+    }, [currentProfileConfig, t])
+
+    const handleUpdateProfile = useCallback(() => {
+        if (!selectedProfile) {
+            return
+        }
+
+        const updatedConfig = currentProfileConfig()
+        setProfiles((current) => current.map((profile) => (
+            profile.id === selectedProfile.id
+                ? {
+                    ...profile,
+                    config: updatedConfig,
+                    updatedAt: Date.now(),
+                }
+                : profile
+        )))
+    }, [currentProfileConfig, selectedProfile])
+
+    const handleDeleteProfile = useCallback(() => {
+        if (!selectedProfile) {
+            return
+        }
+
+        const confirmed = window.confirm(t('newSession.profile.confirmDelete', { name: selectedProfile.name }))
+        if (!confirmed) {
+            return
+        }
+
+        setProfiles((current) => current.filter((profile) => profile.id !== selectedProfile.id))
+        setSelectedProfileId(null)
+    }, [selectedProfile, t])
+
     const handleDirectoryFocus = useCallback(() => {
         setSuppressSuggestions(false)
         setIsDirectoryFocused(true)
@@ -251,6 +372,9 @@ export function NewSession(props: {
             const resolvedModelReasoningEffort = agent === 'codex' && modelReasoningEffort !== 'default'
                 ? modelReasoningEffort
                 : undefined
+            const resolvedAdditionalParameters = agent === 'claude'
+                ? additionalParameters.map((parameter) => parameter.trim()).filter(Boolean)
+                : undefined
             const result = await spawnSession({
                 machineId,
                 directory: trimmedDirectory,
@@ -260,7 +384,8 @@ export function NewSession(props: {
                 modelReasoningEffort: resolvedModelReasoningEffort,
                 yolo: yoloMode,
                 sessionType,
-                worktreeName: sessionType === 'worktree' ? (worktreeName.trim() || undefined) : undefined
+                worktreeName: sessionType === 'worktree' ? (worktreeName.trim() || undefined) : undefined,
+                additionalParameters: resolvedAdditionalParameters
             })
 
             if (result.type === 'success') {
@@ -283,6 +408,15 @@ export function NewSession(props: {
 
     return (
         <div className="flex flex-col divide-y divide-[var(--app-divider)]">
+            <ProfileSection
+                profiles={profiles}
+                selectedProfileId={selectedProfileId}
+                isDisabled={isFormDisabled}
+                onSelectProfile={handleSelectProfile}
+                onSaveAsNew={handleSaveProfileAsNew}
+                onUpdateProfile={handleUpdateProfile}
+                onDeleteProfile={handleDeleteProfile}
+            />
             <MachineSelector
                 machines={props.machines}
                 machineId={machineId}
@@ -345,6 +479,12 @@ export function NewSession(props: {
                 yoloMode={yoloMode}
                 isDisabled={isFormDisabled}
                 onToggle={setYoloMode}
+            />
+            <AdditionalParametersSection
+                agent={agent}
+                parameters={additionalParameters}
+                isDisabled={isFormDisabled}
+                onChange={setAdditionalParameters}
             />
 
             {(error ?? spawnError) ? (

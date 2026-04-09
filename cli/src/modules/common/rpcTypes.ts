@@ -12,6 +12,7 @@ export interface SpawnSessionOptions {
     token?: string
     sessionType?: 'simple' | 'worktree'
     worktreeName?: string
+    additionalParameters?: string[]
 }
 
 export type SpawnSessionResult =

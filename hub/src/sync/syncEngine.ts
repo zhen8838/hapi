@@ -325,7 +325,8 @@ export class SyncEngine {
         sessionType?: 'simple' | 'worktree',
         worktreeName?: string,
         resumeSessionId?: string,
-        effort?: string
+        effort?: string,
+        additionalParameters?: string[]
     ): Promise<{ type: 'success'; sessionId: string } | { type: 'error'; message: string }> {
         return await this.rpcGateway.spawnSession(
             machineId,
@@ -337,7 +338,8 @@ export class SyncEngine {
             sessionType,
             worktreeName,
             resumeSessionId,
-            effort
+            effort,
+            additionalParameters
         )
     }
 

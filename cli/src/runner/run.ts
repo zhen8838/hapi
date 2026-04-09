@@ -372,6 +372,9 @@ export async function startRunner(): Promise<void> {
         if (yolo) {
           args.push('--yolo');
         }
+        if (agent === 'claude' && options.additionalParameters && options.additionalParameters.length > 0) {
+          args.push(...options.additionalParameters);
+        }
 
         // sessionId reserved for future use
         const MAX_TAIL_CHARS = 4000;

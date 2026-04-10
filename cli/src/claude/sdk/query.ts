@@ -298,6 +298,7 @@ export function query(config: {
         prompt,
         options: {
             additionalDirectories = [],
+            extraArgs = [],
             allowedTools = [],
             appendSystemPrompt,
             customSystemPrompt,
@@ -347,6 +348,7 @@ export function query(config: {
     if (additionalDirectories.length > 0) args.push('--add-dir', ...additionalDirectories)
     if (strictMcpConfig) args.push('--strict-mcp-config')
     if (permissionMode) args.push('--permission-mode', permissionMode)
+    if (extraArgs.length > 0) args.push(...extraArgs)
 
     if (fallbackModel) {
         if (model && fallbackModel === model) {

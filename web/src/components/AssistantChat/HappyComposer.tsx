@@ -29,6 +29,7 @@ import { ComposerButtons } from '@/components/AssistantChat/ComposerButtons'
 import { AttachmentItem } from '@/components/AssistantChat/AttachmentItem'
 import { useTranslation } from '@/lib/use-translation'
 import type { AttachmentMetadata } from '@/types/api'
+import { makeClientSideId } from '@/lib/messages'
 import { getModelOptionsForFlavor, getNextModelForFlavor } from './modelOptions'
 import { getClaudeComposerEffortOptions } from './claudeEffortOptions'
 import { extractQueuedAttachments, type QueuedComposerMessage } from './queuedMessages'
@@ -267,7 +268,7 @@ export function HappyComposer(props: {
 
         const nextAttachments = hasAttachments ? extractQueuedAttachments(attachments) : []
         const nextQueuedMessage: QueuedComposerMessage = {
-            id: crypto.randomUUID(),
+            id: makeClientSideId('queued'),
             text: composerText,
             attachments: nextAttachments.length > 0 ? nextAttachments : undefined
         }

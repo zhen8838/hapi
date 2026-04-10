@@ -1,4 +1,6 @@
 import { ComposerPrimitive } from '@assistant-ui/react'
+import type { MouseEvent as ReactMouseEvent, TouchEvent as ReactTouchEvent } from 'react'
+import { useRef } from 'react'
 import { useTranslation } from '@/lib/use-translation'
 
 function SettingsIcon() {
@@ -156,6 +158,7 @@ function UnifiedButton(props: {
     onSend: () => void
 }) {
     const { t } = useTranslation()
+    const touchHandledRef = useRef(false)
     let icon: React.ReactNode
     let className: string
     let ariaLabel: string
@@ -174,16 +177,39 @@ function UnifiedButton(props: {
         ariaLabel = t('composer.send')
     }
 
-    const isDisabled = props.controlsDisabled || (!props.canSend && !props.canQueue)
+    const isDisabled = !props.canSend && !props.canQueue
+
+    const trigger = () => {
+        if (isDisabled) return
+        props.onSend()
+    }
+
+    const handleTouchStart = (event: ReactTouchEvent<HTMLButtonElement>) => {
+        if (isDisabled) return
+        event.preventDefault()
+        touchHandledRef.current = true
+        trigger()
+    }
+
+    const handleClick = (event: ReactMouseEvent<HTMLButtonElement>) => {
+        if (touchHandledRef.current) {
+            touchHandledRef.current = false
+            event.preventDefault()
+            return
+        }
+        trigger()
+    }
 
     return (
         <button
             type="button"
-            onClick={props.onSend}
+            onClick={handleClick}
+            onTouchStart={handleTouchStart}
+            onMouseDown={(event) => event.preventDefault()}
             disabled={isDisabled}
             aria-label={ariaLabel}
             title={ariaLabel}
-            className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+            className={`touch-manipulation flex h-8 w-8 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
         >
             {icon}
         </button>

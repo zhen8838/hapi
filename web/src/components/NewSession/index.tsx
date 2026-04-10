@@ -9,6 +9,7 @@ import { useActiveSuggestions, type Suggestion } from '@/hooks/useActiveSuggesti
 import { useDirectorySuggestions } from '@/hooks/useDirectorySuggestions'
 import { useRecentPaths } from '@/hooks/useRecentPaths'
 import { useTranslation } from '@/lib/use-translation'
+import { makeClientSideId } from '@/lib/messages'
 import type { AgentType, ClaudeEffort, CodexReasoningEffort, SessionType } from './types'
 import { ActionButtons } from './ActionButtons'
 import { AdditionalParametersSection } from './AdditionalParametersSection'
@@ -63,6 +64,7 @@ export function NewSession(props: {
     const [additionalParameters, setAdditionalParameters] = useState<string[]>([])
     const [profiles, setProfiles] = useState<SessionProfile[]>(() => loadSessionProfiles())
     const [selectedProfileId, setSelectedProfileId] = useState<string | null>(() => loadSelectedSessionProfileId())
+    const [profileName, setProfileName] = useState('')
     const [directoryCreationConfirmed, setDirectoryCreationConfirmed] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const worktreeInputRef = useRef<HTMLInputElement>(null)
@@ -97,6 +99,7 @@ export function NewSession(props: {
         setSessionType(profile.config.sessionType)
         setWorktreeName(profile.config.worktreeName)
         setAdditionalParameters([...profile.config.additionalParameters])
+        setProfileName(profile.name)
     }, [])
 
     useEffect(() => {
@@ -261,18 +264,20 @@ export function NewSession(props: {
 
     const handleSelectProfile = useCallback((profileId: string | null) => {
         setSelectedProfileId(profileId)
+        if (!profileId) {
+            setProfileName('')
+        }
     }, [])
 
     const handleSaveProfileAsNew = useCallback(() => {
-        const name = window.prompt(t('newSession.profile.promptName'))
-        const trimmedName = name?.trim()
+        const trimmedName = profileName.trim()
         if (!trimmedName) {
             return
         }
 
         const now = Date.now()
         const profile: SessionProfile = {
-            id: crypto.randomUUID(),
+            id: makeClientSideId('profile'),
             name: trimmedName,
             config: currentProfileConfig(),
             createdAt: now,
@@ -281,7 +286,8 @@ export function NewSession(props: {
 
         setProfiles((current) => [...current, profile])
         setSelectedProfileId(profile.id)
-    }, [currentProfileConfig, t])
+        setProfileName(trimmedName)
+    }, [currentProfileConfig, profileName])
 
     const handleUpdateProfile = useCallback(() => {
         if (!selectedProfile) {
@@ -289,16 +295,21 @@ export function NewSession(props: {
         }
 
         const updatedConfig = currentProfileConfig()
+        const trimmedName = profileName.trim()
+        if (!trimmedName) {
+            return
+        }
         setProfiles((current) => current.map((profile) => (
             profile.id === selectedProfile.id
                 ? {
                     ...profile,
+                    name: trimmedName,
                     config: updatedConfig,
                     updatedAt: Date.now(),
                 }
                 : profile
         )))
-    }, [currentProfileConfig, selectedProfile])
+    }, [currentProfileConfig, profileName, selectedProfile])
 
     const handleDeleteProfile = useCallback(() => {
         if (!selectedProfile) {
@@ -411,7 +422,9 @@ export function NewSession(props: {
             <ProfileSection
                 profiles={profiles}
                 selectedProfileId={selectedProfileId}
+                profileName={profileName}
                 isDisabled={isFormDisabled}
+                onProfileNameChange={setProfileName}
                 onSelectProfile={handleSelectProfile}
                 onSaveAsNew={handleSaveProfileAsNew}
                 onUpdateProfile={handleUpdateProfile}

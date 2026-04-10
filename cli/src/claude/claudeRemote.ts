@@ -39,6 +39,28 @@ export async function claudeRemote(opts: {
 }) {
     const debugPrefix = '[claudeRemote][async-debug]';
 
+    const filterClaudeRemoteArgs = (args: string[] | undefined): string[] => {
+        if (!args || args.length === 0) {
+            return []
+        }
+
+        const filtered: string[] = []
+        for (let i = 0; i < args.length; i++) {
+            const arg = args[i]
+            if (arg !== '--resume') {
+                filtered.push(arg)
+                continue
+            }
+
+            const nextArg = args[i + 1]
+            if (nextArg && !nextArg.startsWith('-')) {
+                i += 1
+            }
+        }
+
+        return filtered
+    }
+
     // Check if session is valid
     let startFrom = opts.sessionId;
     if (opts.sessionId && !claudeCheckSession(opts.sessionId, opts.path)) {
@@ -134,6 +156,7 @@ export async function claudeRemote(opts: {
         appendSystemPrompt: initial.mode.appendSystemPrompt ? initial.mode.appendSystemPrompt + '\n\n' + systemPrompt : systemPrompt,
         allowedTools: initial.mode.allowedTools ? initial.mode.allowedTools.concat(opts.allowedTools) : opts.allowedTools,
         disallowedTools: initial.mode.disallowedTools,
+        extraArgs: filterClaudeRemoteArgs(opts.claudeArgs),
         canCallTool: (toolName: string, input: unknown, options: { signal: AbortSignal }) => opts.canCallTool(toolName, input, mode, options),
         abort: opts.signal,
         pathToClaudeCodeExecutable: getDefaultClaudeCodePath(),

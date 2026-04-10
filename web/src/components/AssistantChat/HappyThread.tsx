@@ -9,6 +9,7 @@ import { HappySystemMessage } from '@/components/AssistantChat/messages/SystemMe
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/Spinner'
 import { useTranslation } from '@/lib/use-translation'
+import { computeRetainedScrollTop, type ScrollMetrics } from './scrollRetention'
 
 function NewMessagesIndicator(props: { count: number; onClick: () => void }) {
     const { t } = useTranslation()
@@ -91,6 +92,7 @@ export function HappyThread(props: {
     const onAtBottomChangeRef = useRef(props.onAtBottomChange)
     const onFlushPendingRef = useRef(props.onFlushPending)
     const forceScrollTokenRef = useRef(props.forceScrollToken)
+    const viewportMetricsRef = useRef<ScrollMetrics | null>(null)
 
     // Smart scroll state: autoScroll enabled when user is near bottom
     const [autoScrollEnabled, setAutoScrollEnabled] = useState(true)
@@ -124,6 +126,11 @@ export function HappyThread(props: {
         const THRESHOLD_PX = 120
 
         const handleScroll = () => {
+            viewportMetricsRef.current = {
+                scrollTop: viewport.scrollTop,
+                scrollHeight: viewport.scrollHeight,
+                clientHeight: viewport.clientHeight,
+            }
             const distanceFromBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight
             const isNearBottom = distanceFromBottom < THRESHOLD_PX
 
@@ -143,14 +150,67 @@ export function HappyThread(props: {
         }
 
         viewport.addEventListener('scroll', handleScroll, { passive: true })
+        handleScroll()
         return () => viewport.removeEventListener('scroll', handleScroll)
     }, []) // Stable: no dependencies, reads from refs
+
+    useLayoutEffect(() => {
+        const viewport = viewportRef.current
+        if (!viewport || typeof ResizeObserver === 'undefined') {
+            return
+        }
+
+        const observer = new ResizeObserver(() => {
+            const previous = viewportMetricsRef.current
+            if (!previous) {
+                viewportMetricsRef.current = {
+                    scrollTop: viewport.scrollTop,
+                    scrollHeight: viewport.scrollHeight,
+                    clientHeight: viewport.clientHeight,
+                }
+                return
+            }
+
+            if (previous.clientHeight === viewport.clientHeight) {
+                viewportMetricsRef.current = {
+                    scrollTop: viewport.scrollTop,
+                    scrollHeight: viewport.scrollHeight,
+                    clientHeight: viewport.clientHeight,
+                }
+                return
+            }
+
+            const nextScrollTop = computeRetainedScrollTop({
+                previous,
+                next: {
+                    scrollHeight: viewport.scrollHeight,
+                    clientHeight: viewport.clientHeight,
+                },
+                keepBottomAligned: autoScrollEnabledRef.current || atBottomRef.current,
+            })
+
+            viewport.scrollTop = nextScrollTop
+            viewportMetricsRef.current = {
+                scrollTop: nextScrollTop,
+                scrollHeight: viewport.scrollHeight,
+                clientHeight: viewport.clientHeight,
+            }
+        })
+
+        observer.observe(viewport)
+        return () => observer.disconnect()
+    }, [])
 
     // Scroll to bottom handler for the indicator button
     const scrollToBottom = useCallback(() => {
         const viewport = viewportRef.current
         if (viewport) {
             viewport.scrollTo({ top: viewport.scrollHeight, behavior: 'smooth' })
+            viewportMetricsRef.current = {
+                scrollTop: viewport.scrollHeight,
+                scrollHeight: viewport.scrollHeight,
+                clientHeight: viewport.clientHeight,
+            }
         }
         setAutoScrollEnabled(true)
         if (!atBottomRef.current) {
@@ -250,6 +310,11 @@ export function HappyThread(props: {
         }
         const delta = viewport.scrollHeight - pending.scrollHeight
         viewport.scrollTop = pending.scrollTop + delta
+        viewportMetricsRef.current = {
+            scrollTop: viewport.scrollTop,
+            scrollHeight: viewport.scrollHeight,
+            clientHeight: viewport.clientHeight,
+        }
         pendingScrollRef.current = null
         loadLockRef.current = false
     }, [props.messagesVersion])

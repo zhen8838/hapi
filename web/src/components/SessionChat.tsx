@@ -397,6 +397,7 @@ export function SessionChat(props: {
                         voiceMicMuted={voice?.micMuted}
                         onVoiceToggle={voice ? handleVoiceToggle : undefined}
                         onVoiceMicToggle={voice ? handleVoiceMicToggle : undefined}
+                        onQueuedSend={handleSend}
                     />
                 </div>
             </AssistantRuntimeProvider>

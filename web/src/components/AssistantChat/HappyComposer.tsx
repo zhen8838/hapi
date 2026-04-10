@@ -28,8 +28,10 @@ import { StatusBar } from '@/components/AssistantChat/StatusBar'
 import { ComposerButtons } from '@/components/AssistantChat/ComposerButtons'
 import { AttachmentItem } from '@/components/AssistantChat/AttachmentItem'
 import { useTranslation } from '@/lib/use-translation'
+import type { AttachmentMetadata } from '@/types/api'
 import { getModelOptionsForFlavor, getNextModelForFlavor } from './modelOptions'
 import { getClaudeComposerEffortOptions } from './claudeEffortOptions'
+import { extractQueuedAttachments, type QueuedComposerMessage } from './queuedMessages'
 
 export interface TextInputState {
     text: string
@@ -65,6 +67,7 @@ export function HappyComposer(props: {
     voiceMicMuted?: boolean
     onVoiceToggle?: () => void
     onVoiceMicToggle?: () => void
+    onQueuedSend?: (text: string, attachments?: AttachmentMetadata[]) => void
 }) {
     const { t } = useTranslation()
     const {
@@ -92,7 +95,8 @@ export function HappyComposer(props: {
         voiceStatus = 'disconnected',
         voiceMicMuted = false,
         onVoiceToggle,
-        onVoiceMicToggle
+        onVoiceMicToggle,
+        onQueuedSend
     } = props
 
     // Use ?? so missing values fall back to default (destructuring defaults only handle undefined)
@@ -122,6 +126,7 @@ export function HappyComposer(props: {
         return typeof path === 'string' && path.length > 0
     })
     const canSend = (hasText || hasAttachments) && attachmentsReady && !controlsDisabled && !threadIsRunning
+    const canQueue = (hasText || hasAttachments) && attachmentsReady && !controlsDisabled && threadIsRunning
 
     const [inputState, setInputState] = useState<TextInputState>({
         text: '',
@@ -131,9 +136,11 @@ export function HappyComposer(props: {
     const [isAborting, setIsAborting] = useState(false)
     const [isSwitching, setIsSwitching] = useState(false)
     const [showContinueHint, setShowContinueHint] = useState(false)
+    const [queuedMessages, setQueuedMessages] = useState<QueuedComposerMessage[]>([])
 
     const textareaRef = useRef<HTMLTextAreaElement>(null)
     const prevControlledByUser = useRef(controlledByUser)
+    const queueDispatchInFlightRef = useRef(false)
 
     useEffect(() => {
         setInputState((prev) => {
@@ -246,6 +253,35 @@ export function HappyComposer(props: {
         api.thread().cancelRun()
     }, [abortDisabled, api, haptic])
 
+    const clearComposer = useCallback(async () => {
+        api.composer().setText('')
+        try {
+            await api.composer().clearAttachments()
+        } catch {
+            // Best effort
+        }
+    }, [api])
+
+    const enqueueCurrentComposer = useCallback(async () => {
+        if (!canQueue) return
+
+        const nextAttachments = hasAttachments ? extractQueuedAttachments(attachments) : []
+        const nextQueuedMessage: QueuedComposerMessage = {
+            id: crypto.randomUUID(),
+            text: composerText,
+            attachments: nextAttachments.length > 0 ? nextAttachments : undefined
+        }
+
+        setQueuedMessages((current) => [...current, nextQueuedMessage])
+        await clearComposer()
+        setShowContinueHint(false)
+        haptic('success')
+    }, [attachments, canQueue, clearComposer, composerText, hasAttachments, haptic])
+
+    const removeQueuedMessage = useCallback((id: string) => {
+        setQueuedMessages((current) => current.filter((message) => message.id !== id))
+    }, [])
+
     const handleSwitch = useCallback(async () => {
         if (switchDisabled || !onSwitchToRemote) return
         haptic('light')
@@ -286,11 +322,16 @@ export function HappyComposer(props: {
             return
         }
 
-        // Shift+Enter sends the message (works on all platforms including iPadOS with keyboard)
-        if (key === 'Enter' && e.shiftKey) {
+        if (key === 'Enter' && (e.metaKey || e.ctrlKey)) {
             e.preventDefault()
-            if (!canSend) return
-            api.composer().send()
+            if (canSend) {
+                api.composer().send()
+                setShowContinueHint(false)
+                return
+            }
+            if (canQueue) {
+                void enqueueCurrentComposer()
+            }
             setShowContinueHint(false)
             return
         }
@@ -346,7 +387,9 @@ export function HappyComposer(props: {
         permissionMode,
         permissionModes,
         canSend,
+        canQueue,
         api,
+        enqueueCurrentComposer,
         haptic
     ])
 
@@ -443,11 +486,33 @@ export function HappyComposer(props: {
     const showEffortSettings = Boolean(onEffortChange && supportsEffort(agentFlavor))
     const showSettingsButton = Boolean(showCollaborationSettings || showPermissionSettings || showModelSettings || showEffortSettings)
     const showAbortButton = true
-    const voiceEnabled = Boolean(onVoiceToggle)
-
     const handleSend = useCallback(() => {
-        api.composer().send()
-    }, [api])
+        if (canSend) {
+            api.composer().send()
+            return
+        }
+        if (canQueue) {
+            void enqueueCurrentComposer()
+        }
+    }, [api, canQueue, canSend, enqueueCurrentComposer])
+
+    useEffect(() => {
+        if (threadIsRunning) {
+            queueDispatchInFlightRef.current = false
+            return
+        }
+        if (!onQueuedSend || controlsDisabled || queueDispatchInFlightRef.current) {
+            return
+        }
+        const nextQueuedMessage = queuedMessages[0]
+        if (!nextQueuedMessage) {
+            return
+        }
+
+        queueDispatchInFlightRef.current = true
+        setQueuedMessages((current) => current.slice(1))
+        onQueuedSend(nextQueuedMessage.text, nextQueuedMessage.attachments)
+    }, [controlsDisabled, onQueuedSend, queuedMessages, threadIsRunning])
 
     const overlays = useMemo(() => {
         if (showSettings && (showCollaborationSettings || showPermissionSettings || showModelSettings || showEffortSettings)) {
@@ -676,6 +741,38 @@ export function HappyComposer(props: {
                         voiceStatus={voiceStatus}
                     />
 
+                    {queuedMessages.length > 0 ? (
+                        <div className="mb-2 flex flex-col gap-2">
+                            {queuedMessages.map((message, index) => (
+                                <div
+                                    key={message.id}
+                                    className="flex items-start gap-2 rounded-2xl border border-[var(--app-border)] bg-[var(--app-secondary-bg)] px-3 py-2 text-sm"
+                                >
+                                    <div className="min-w-0 flex-1">
+                                        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--app-hint)]">
+                                            {t('composer.queueItem', { n: index + 1 })}
+                                        </div>
+                                        <div className="whitespace-pre-wrap break-words text-[13px] leading-snug text-[var(--app-fg)]">
+                                            {message.text.trim() || t('composer.queueAttachmentOnly')}
+                                        </div>
+                                        {message.attachments && message.attachments.length > 0 ? (
+                                            <div className="mt-1 text-[11px] text-[var(--app-hint)]">
+                                                {t('composer.queueAttachments', { n: message.attachments.length })}
+                                            </div>
+                                        ) : null}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        className="rounded-full px-2 py-1 text-xs text-[var(--app-hint)] transition-colors hover:bg-[var(--app-subtle-bg)] hover:text-[var(--app-fg)]"
+                                        onClick={() => removeQueuedMessage(message.id)}
+                                    >
+                                        {t('composer.queueRemove')}
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    ) : null}
+
                     <div className="overflow-hidden rounded-[20px] bg-[var(--app-secondary-bg)]">
                         {attachments.length > 0 ? (
                             <div className="flex flex-wrap gap-2 px-4 pt-3">
@@ -690,7 +787,7 @@ export function HappyComposer(props: {
                                 placeholder={showContinueHint ? t('misc.typeMessage') : t('misc.typeAMessage')}
                                 disabled={controlsDisabled}
                                 maxRows={5}
-                                submitOnEnter={!isTouch}
+                                submitOnEnter={false}
                                 cancelOnEscape={false}
                                 onChange={handleChange}
                                 onSelect={handleSelect}
@@ -702,6 +799,7 @@ export function HappyComposer(props: {
 
                         <ComposerButtons
                             canSend={canSend}
+                            canQueue={canQueue}
                             controlsDisabled={controlsDisabled}
                             showSettingsButton={showSettingsButton}
                             onSettingsToggle={handleSettingsToggle}
@@ -717,11 +815,6 @@ export function HappyComposer(props: {
                             switchDisabled={switchDisabled}
                             isSwitching={isSwitching}
                             onSwitch={handleSwitch}
-                            voiceEnabled={voiceEnabled}
-                            voiceStatus={voiceStatus}
-                            voiceMicMuted={voiceMicMuted}
-                            onVoiceToggle={onVoiceToggle ?? (() => {})}
-                            onVoiceMicToggle={onVoiceMicToggle}
                             onSend={handleSend}
                         />
                     </div>

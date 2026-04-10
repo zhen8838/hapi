@@ -305,4 +305,9 @@ export default {
   'misc.permissionRequired': '需要权限',
   'misc.percentLeft': '剩余 {percent}%',
   'misc.online': '在线',
+  'composer.queueItem': '排队 #{n}',
+  'composer.queue': '加入队列',
+  'composer.queueRemove': '清除',
+  'composer.queueAttachments': '{n} 个附件',
+  'composer.queueAttachmentOnly': '（仅附件）',
 } as const

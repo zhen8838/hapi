@@ -303,4 +303,9 @@ export default {
   'misc.permissionRequired': 'permission required',
   'misc.percentLeft': '{percent}% left',
   'misc.online': 'online',
+  'composer.queueItem': 'Queued #{n}',
+  'composer.queue': 'Queue',
+  'composer.queueRemove': 'Clear',
+  'composer.queueAttachments': '{n} attachment(s)',
+  'composer.queueAttachmentOnly': '(attachments only)',
 } as const

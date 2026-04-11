@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from '@tanstack/react-router'
 import type { SessionSummary } from '@/types/api'
 import type { ApiClient } from '@/api/client'
 import { useLongPress } from '@/hooks/useLongPress'
@@ -211,6 +212,7 @@ function SessionItem(props: {
 }) {
     const { t } = useTranslation()
     const { addToast } = useToast()
+    const navigate = useNavigate()
     const { session: s, onSelect, showPath = true, api, selected = false } = props
     const { haptic } = usePlatform()
     const [menuOpen, setMenuOpen] = useState(false)
@@ -318,6 +320,21 @@ function SessionItem(props: {
                 onCopyId={() => {
                     navigator.clipboard.writeText(s.id)
                     addToast({ title: t('session.action.copyIdDone'), body: s.id, sessionId: s.id, url: '' })
+                }}
+                forkVisible={s.metadata?.flavor === 'claude'}
+                onFork={async () => {
+                    if (s.active) {
+                        addToast({ title: t('session.action.forkError'), body: 'Session must be inactive', sessionId: s.id, url: '' })
+                        return
+                    }
+                    addToast({ title: t('session.action.forking'), body: '', sessionId: s.id, url: '' })
+                    try {
+                        const newSessionId = await api!.forkSession(s.id)
+                        addToast({ title: t('session.action.forkSuccess'), body: '', sessionId: newSessionId, url: '' })
+                        navigate({ to: '/sessions/$sessionId', params: { sessionId: newSessionId } })
+                    } catch (error) {
+                        addToast({ title: t('session.action.forkError'), body: String(error), sessionId: s.id, url: '' })
+                    }
                 }}
                 anchorPoint={menuAnchorPoint}
             />

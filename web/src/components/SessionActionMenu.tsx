@@ -17,6 +17,8 @@ type SessionActionMenuProps = {
     onArchive: () => void
     onDelete: () => void
     onCopyId?: () => void
+    onFork?: () => void
+    forkVisible?: boolean
     anchorPoint: { x: number; y: number }
     menuId?: string
 }
@@ -66,6 +68,14 @@ function ClipboardIcon(props: { className?: string }) {
     return (
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={props.className}>
             <rect width="8" height="4" x="8" y="2" rx="1" ry="1" /><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+        </svg>
+    )
+}
+
+function ForkIcon(props: { className?: string }) {
+    return (
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={props.className}>
+            <circle cx="12" cy="18" r="3" /><circle cx="6" cy="6" r="3" /><circle cx="18" cy="6" r="3" /><path d="M18 9v2c0 .6-.4 1-1 1H7c-.6 0-1-.4-1-1V9" /><path d="M12 12v3" />
         </svg>
     )
 }
@@ -245,6 +255,16 @@ export function SessionActionMenu(props: SessionActionMenuProps) {
                         onClick={() => { onCopyId?.(); onClose(); }}>
                         <ClipboardIcon className="text-[var(--app-hint)]" />
                         {t('session.action.copyId')}
+                    </button>
+                ) : null}
+
+                {props.onFork && props.forkVisible ? (
+                    <button type="button" role="menuitem"
+                        className={`${baseItemClassName} hover:bg-[var(--app-subtle-bg)]`}
+                        onClick={() => { props.onFork?.(); props.onClose(); }}
+                        disabled={props.sessionActive}>
+                        <ForkIcon className="text-[var(--app-hint)]" />
+                        {t('session.action.fork')}
                     </button>
                 ) : null}
 

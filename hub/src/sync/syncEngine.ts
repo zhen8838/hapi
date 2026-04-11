@@ -42,6 +42,10 @@ export type ResumeSessionResult =
     | { type: 'success'; sessionId: string }
     | { type: 'error'; message: string; code: 'session_not_found' | 'access_denied' | 'no_machine_online' | 'resume_unavailable' | 'resume_failed' }
 
+export type ForkSessionResult =
+    | { type: 'success'; sessionId: string }
+    | { type: 'error'; message: string; code: 'session_not_found' | 'access_denied' | 'no_machine_online' | 'resume_unavailable' | 'resume_failed' | 'unsupported_agent' | 'session_active' }
+
 export class SyncEngine {
     private readonly eventPublisher: EventPublisher
     private readonly sessionCache: SessionCache
@@ -430,6 +434,86 @@ export class SyncEngine {
                 const message = error instanceof Error ? error.message : 'Failed to merge resumed session'
                 return { type: 'error', message, code: 'resume_failed' }
             }
+        }
+
+        return { type: 'success', sessionId: spawnResult.sessionId }
+    }
+
+    async forkSession(sessionId: string, namespace: string): Promise<ForkSessionResult> {
+        const access = this.sessionCache.resolveSessionAccess(sessionId, namespace)
+        if (!access.ok) {
+            return {
+                type: 'error',
+                message: access.reason === 'access-denied' ? 'Session access denied' : 'Session not found',
+                code: access.reason === 'access-denied' ? 'access_denied' : 'session_not_found'
+            }
+        }
+
+        const session = access.session
+        if (session.active) {
+            return { type: 'error', message: 'Session must be inactive to fork', code: 'session_active' }
+        }
+
+        const metadata = session.metadata
+        if (!metadata || typeof metadata.path !== 'string') {
+            return { type: 'error', message: 'Session metadata missing path', code: 'resume_unavailable' }
+        }
+
+        const flavor = metadata.flavor === 'codex' || metadata.flavor === 'gemini' || metadata.flavor === 'opencode' || metadata.flavor === 'cursor'
+            ? metadata.flavor
+            : 'claude'
+
+        if (flavor !== 'claude') {
+            return { type: 'error', message: 'Fork is only supported for Claude sessions', code: 'unsupported_agent' }
+        }
+
+        const resumeToken = metadata.claudeSessionId
+        if (!resumeToken) {
+            return { type: 'error', message: 'Resume session ID unavailable', code: 'resume_unavailable' }
+        }
+
+        const onlineMachines = this.machineCache.getOnlineMachinesByNamespace(namespace)
+        if (onlineMachines.length === 0) {
+            return { type: 'error', message: 'No machine online', code: 'no_machine_online' }
+        }
+
+        const targetMachine = (() => {
+            if (metadata.machineId) {
+                const exact = onlineMachines.find((machine) => machine.id === metadata.machineId)
+                if (exact) return exact
+            }
+            if (metadata.host) {
+                const hostMatch = onlineMachines.find((machine) => machine.metadata?.host === metadata.host)
+                if (hostMatch) return hostMatch
+            }
+            return null
+        })()
+
+        if (!targetMachine) {
+            return { type: 'error', message: 'No machine online', code: 'no_machine_online' }
+        }
+
+        const spawnResult = await this.rpcGateway.spawnSession(
+            targetMachine.id,
+            metadata.path,
+            'claude',
+            session.model ?? undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            resumeToken,
+            session.effort ?? undefined,
+            ['--fork-session']
+        )
+
+        if (spawnResult.type !== 'success') {
+            return { type: 'error', message: spawnResult.message, code: 'resume_failed' }
+        }
+
+        const becameActive = await this.waitForSessionActive(spawnResult.sessionId)
+        if (!becameActive) {
+            return { type: 'error', message: 'Session failed to become active', code: 'resume_failed' }
         }
 
         return { type: 'success', sessionId: spawnResult.sessionId }

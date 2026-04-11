@@ -65,6 +65,10 @@ export default {
   'session.action.copy': 'Copy',
   'session.action.copyId': 'Copy Session ID',
   'session.action.copyIdDone': 'Copied to clipboard',
+  'session.action.fork': 'Fork Session',
+  'session.action.forking': 'Forking session...',
+  'session.action.forkSuccess': 'Session forked',
+  'session.action.forkError': 'Failed to fork session',
 
   // Dialogs
   'dialog.rename.title': 'Rename Session',

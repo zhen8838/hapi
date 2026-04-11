@@ -11,18 +11,35 @@ import { Spinner } from '@/components/Spinner'
 import { useTranslation } from '@/lib/use-translation'
 import { computeRetainedScrollTop, type ScrollMetrics } from './scrollRetention'
 
-function NewMessagesIndicator(props: { count: number; onClick: () => void }) {
+function ChevronDownIcon(props: { className?: string }) {
+    return (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={props.className}>
+            <path d="m6 9 6 6 6-6" />
+        </svg>
+    )
+}
+
+function ScrollToBottomButton(props: {
+    visible: boolean
+    pendingCount: number
+    onClick: () => void
+}) {
     const { t } = useTranslation()
-    if (props.count === 0) {
+    if (!props.visible) {
         return null
     }
-
     return (
         <button
             onClick={props.onClick}
-            className="absolute bottom-20 left-1/2 -translate-x-1/2 bg-[var(--app-button)] text-[var(--app-button-text)] px-3 py-1.5 rounded-full text-sm font-medium shadow-lg animate-bounce-in z-10"
+            aria-label={t('misc.scrollToBottom')}
+            className="absolute bottom-6 left-1/2 z-10 flex h-8 w-8 -translate-x-1/2 items-center justify-center rounded-full bg-[var(--app-secondary-bg)] text-[var(--app-fg)] shadow-md ring-1 ring-[var(--app-border)] transition-all hover:bg-[var(--app-subtle-bg)] animate-bounce-in"
         >
-            {t('misc.newMessage', { n: props.count })} &#8595;
+            <ChevronDownIcon className="h-4 w-4" />
+            {props.pendingCount > 0 ? (
+                <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--app-link)] px-1 text-[10px] font-bold text-white">
+                    {props.pendingCount}
+                </span>
+            ) : null}
         </button>
     )
 }
@@ -397,7 +414,11 @@ export function HappyThread(props: {
                         </div>
                     </div>
                 </ThreadPrimitive.Viewport>
-                <NewMessagesIndicator count={props.pendingCount} onClick={scrollToBottom} />
+                <ScrollToBottomButton
+                    visible={!autoScrollEnabled}
+                    pendingCount={props.pendingCount}
+                    onClick={scrollToBottom}
+                />
             </ThreadPrimitive.Root>
         </HappyChatProvider>
     )

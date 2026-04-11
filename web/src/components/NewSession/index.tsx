@@ -5,6 +5,7 @@ import { usePlatform } from '@/hooks/usePlatform'
 import { useMachinePathsExists } from '@/hooks/useMachinePathsExists'
 import { useSpawnSession } from '@/hooks/mutations/useSpawnSession'
 import { useSessions } from '@/hooks/queries/useSessions'
+import { useProfiles } from '@/hooks/queries/useProfiles'
 import { useActiveSuggestions, type Suggestion } from '@/hooks/useActiveSuggestions'
 import { useDirectorySuggestions } from '@/hooks/useDirectorySuggestions'
 import { useRecentPaths } from '@/hooks/useRecentPaths'
@@ -21,14 +22,9 @@ import { ProfileSection } from './ProfileSection'
 import { ClaudeEffortSelector } from './ClaudeEffortSelector'
 import { ReasoningEffortSelector } from './ReasoningEffortSelector'
 import {
-    loadSelectedSessionProfileId,
-    loadSessionProfiles,
-    loadPreferredAgent,
-    loadPreferredYoloMode,
-    saveSelectedSessionProfileId,
-    saveSessionProfiles,
-    savePreferredAgent,
-    savePreferredYoloMode,
+    loadLegacySessionProfiles,
+    clearLegacyStorage,
+    hasLegacyData,
     type SessionProfile,
     type SessionProfileConfig,
 } from './preferences'
@@ -47,6 +43,7 @@ export function NewSession(props: {
     const { t } = useTranslation()
     const { spawnSession, isPending, error: spawnError } = useSpawnSession(props.api)
     const { sessions } = useSessions(props.api)
+    const { profiles, saveProfile, deleteProfile: deleteProfileApi } = useProfiles(props.api)
     const isFormDisabled = Boolean(isPending || props.isLoading)
     const { getRecentPaths, addRecentPath, getLastUsedMachineId, setLastUsedMachineId } = useRecentPaths()
 
@@ -54,21 +51,48 @@ export function NewSession(props: {
     const [directory, setDirectory] = useState('')
     const [suppressSuggestions, setSuppressSuggestions] = useState(false)
     const [isDirectoryFocused, setIsDirectoryFocused] = useState(false)
-    const [agent, setAgent] = useState<AgentType>(loadPreferredAgent)
+    const [agent, setAgent] = useState<AgentType>('claude')
     const [model, setModel] = useState('auto')
     const [effort, setEffort] = useState<ClaudeEffort>('auto')
     const [modelReasoningEffort, setModelReasoningEffort] = useState<CodexReasoningEffort>('default')
-    const [yoloMode, setYoloMode] = useState(loadPreferredYoloMode)
+    const [yoloMode, setYoloMode] = useState(false)
     const [sessionType, setSessionType] = useState<SessionType>('simple')
     const [worktreeName, setWorktreeName] = useState('')
     const [additionalParameters, setAdditionalParameters] = useState<string[]>([])
-    const [profiles, setProfiles] = useState<SessionProfile[]>(() => loadSessionProfiles())
-    const [selectedProfileId, setSelectedProfileId] = useState<string | null>(() => loadSelectedSessionProfileId())
+    const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null)
     const [profileName, setProfileName] = useState('')
     const [directoryCreationConfirmed, setDirectoryCreationConfirmed] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const worktreeInputRef = useRef<HTMLInputElement>(null)
     const skipAgentDefaultsRef = useRef(false)
+    const migrationDoneRef = useRef(false)
+
+    // One-time migration from localStorage to file-based profiles
+    useEffect(() => {
+        if (migrationDoneRef.current) return
+        if (!hasLegacyData()) {
+            migrationDoneRef.current = true
+            return
+        }
+
+        const legacyProfiles = loadLegacySessionProfiles()
+        if (legacyProfiles.length === 0) {
+            clearLegacyStorage()
+            migrationDoneRef.current = true
+            return
+        }
+
+        migrationDoneRef.current = true
+        // Save each legacy profile to the server, then clear localStorage
+        Promise.all(legacyProfiles.map((profile) => saveProfile(profile).catch(() => {
+            // Ignore individual save errors during migration
+        }))).then(() => {
+            clearLegacyStorage()
+        }).catch(() => {
+            // If migration fails entirely, leave localStorage intact for next attempt
+            migrationDoneRef.current = false
+        })
+    }, [saveProfile])
 
     const selectedProfile = useMemo(
         () => profiles.find((profile) => profile.id === selectedProfileId) ?? null,
@@ -84,6 +108,8 @@ export function NewSession(props: {
         sessionType,
         worktreeName,
         additionalParameters: [...additionalParameters],
+        permissionMode: 'default',
+        collaborationMode: 'default',
     }), [additionalParameters, agent, effort, model, modelReasoningEffort, sessionType, worktreeName, yoloMode])
 
     const applyProfile = useCallback((profile: SessionProfile | null) => {
@@ -116,22 +142,6 @@ export function NewSession(props: {
         setModel('auto')
         setEffort('auto')
     }, [agent])
-
-    useEffect(() => {
-        savePreferredAgent(agent)
-    }, [agent])
-
-    useEffect(() => {
-        savePreferredYoloMode(yoloMode)
-    }, [yoloMode])
-
-    useEffect(() => {
-        saveSessionProfiles(profiles)
-    }, [profiles])
-
-    useEffect(() => {
-        saveSelectedSessionProfileId(selectedProfileId)
-    }, [selectedProfileId])
 
     useEffect(() => {
         if (!selectedProfileId) {
@@ -284,32 +294,35 @@ export function NewSession(props: {
             updatedAt: now,
         }
 
-        setProfiles((current) => [...current, profile])
-        setSelectedProfileId(profile.id)
-        setProfileName(trimmedName)
-    }, [currentProfileConfig, profileName])
+        saveProfile(profile).then(() => {
+            setSelectedProfileId(profile.id)
+            setProfileName(trimmedName)
+        }).catch(() => {
+            // Save error handled by mutation state
+        })
+    }, [currentProfileConfig, profileName, saveProfile])
 
     const handleUpdateProfile = useCallback(() => {
         if (!selectedProfile) {
             return
         }
 
-        const updatedConfig = currentProfileConfig()
         const trimmedName = profileName.trim()
         if (!trimmedName) {
             return
         }
-        setProfiles((current) => current.map((profile) => (
-            profile.id === selectedProfile.id
-                ? {
-                    ...profile,
-                    name: trimmedName,
-                    config: updatedConfig,
-                    updatedAt: Date.now(),
-                }
-                : profile
-        )))
-    }, [currentProfileConfig, profileName, selectedProfile])
+
+        const updatedProfile: SessionProfile = {
+            ...selectedProfile,
+            name: trimmedName,
+            config: currentProfileConfig(),
+            updatedAt: Date.now(),
+        }
+
+        saveProfile(updatedProfile).catch(() => {
+            // Save error handled by mutation state
+        })
+    }, [currentProfileConfig, profileName, selectedProfile, saveProfile])
 
     const handleDeleteProfile = useCallback(() => {
         if (!selectedProfile) {
@@ -321,9 +334,12 @@ export function NewSession(props: {
             return
         }
 
-        setProfiles((current) => current.filter((profile) => profile.id !== selectedProfile.id))
-        setSelectedProfileId(null)
-    }, [selectedProfile, t])
+        deleteProfileApi(selectedProfile.id).then(() => {
+            setSelectedProfileId(null)
+        }).catch(() => {
+            // Delete error handled by mutation state
+        })
+    }, [selectedProfile, t, deleteProfileApi])
 
     const handleDirectoryFocus = useCallback(() => {
         setSuppressSuggestions(false)

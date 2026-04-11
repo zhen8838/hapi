@@ -1,9 +1,18 @@
+import type { PermissionMode, CodexCollaborationMode } from '@/types/api'
 import type { AgentType, ClaudeEffort, CodexReasoningEffort, SessionType } from './types'
 
-const AGENT_STORAGE_KEY = 'hapi:newSession:agent'
-const YOLO_STORAGE_KEY = 'hapi:newSession:yolo'
 const SESSION_PROFILES_STORAGE_KEY = 'hapi:newSession:profiles'
 const SELECTED_SESSION_PROFILE_STORAGE_KEY = 'hapi:newSession:selectedProfileId'
+const AGENT_STORAGE_KEY = 'hapi:newSession:agent'
+const YOLO_STORAGE_KEY = 'hapi:newSession:yolo'
+
+/** All localStorage keys used by the old profile system, for migration cleanup */
+export const LEGACY_STORAGE_KEYS = [
+    SESSION_PROFILES_STORAGE_KEY,
+    SELECTED_SESSION_PROFILE_STORAGE_KEY,
+    AGENT_STORAGE_KEY,
+    YOLO_STORAGE_KEY,
+] as const
 
 const VALID_AGENTS: AgentType[] = ['claude', 'codex', 'cursor', 'gemini', 'opencode']
 const VALID_CLAUDE_EFFORTS: ClaudeEffort[] = ['auto', 'medium', 'high', 'max']
@@ -19,6 +28,8 @@ export type SessionProfileConfig = {
     sessionType: SessionType
     worktreeName: string
     additionalParameters: string[]
+    permissionMode: PermissionMode
+    collaborationMode: CodexCollaborationMode
 }
 
 export type SessionProfile = {
@@ -27,42 +38,6 @@ export type SessionProfile = {
     config: SessionProfileConfig
     createdAt: number
     updatedAt: number
-}
-
-export function loadPreferredAgent(): AgentType {
-    try {
-        const stored = localStorage.getItem(AGENT_STORAGE_KEY)
-        if (stored && VALID_AGENTS.includes(stored as AgentType)) {
-            return stored as AgentType
-        }
-    } catch {
-        // Ignore storage errors
-    }
-    return 'claude'
-}
-
-export function savePreferredAgent(agent: AgentType): void {
-    try {
-        localStorage.setItem(AGENT_STORAGE_KEY, agent)
-    } catch {
-        // Ignore storage errors
-    }
-}
-
-export function loadPreferredYoloMode(): boolean {
-    try {
-        return localStorage.getItem(YOLO_STORAGE_KEY) === 'true'
-    } catch {
-        return false
-    }
-}
-
-export function savePreferredYoloMode(enabled: boolean): void {
-    try {
-        localStorage.setItem(YOLO_STORAGE_KEY, enabled ? 'true' : 'false')
-    } catch {
-        // Ignore storage errors
-    }
 }
 
 function normalizeSessionProfileConfig(value: unknown): SessionProfileConfig | null {
@@ -93,6 +68,8 @@ function normalizeSessionProfileConfig(value: unknown): SessionProfileConfig | n
     const additionalParameters = Array.isArray(config.additionalParameters)
         ? config.additionalParameters.filter((item): item is string => typeof item === 'string')
         : []
+    const permissionMode = typeof config.permissionMode === 'string' ? config.permissionMode as PermissionMode : 'default'
+    const collaborationMode = typeof config.collaborationMode === 'string' ? config.collaborationMode as CodexCollaborationMode : 'default'
 
     return {
         agent,
@@ -103,6 +80,8 @@ function normalizeSessionProfileConfig(value: unknown): SessionProfileConfig | n
         sessionType,
         worktreeName,
         additionalParameters,
+        permissionMode,
+        collaborationMode,
     }
 }
 
@@ -129,7 +108,11 @@ function normalizeSessionProfile(value: unknown): SessionProfile | null {
     }
 }
 
-export function loadSessionProfiles(): SessionProfile[] {
+/**
+ * Load profiles from localStorage (used only for one-time migration).
+ * After migration, profiles are stored on disk at ~/.hapi/profiles/.
+ */
+export function loadLegacySessionProfiles(): SessionProfile[] {
     try {
         const stored = localStorage.getItem(SESSION_PROFILES_STORAGE_KEY)
         if (!stored) {
@@ -148,31 +131,22 @@ export function loadSessionProfiles(): SessionProfile[] {
     }
 }
 
-export function saveSessionProfiles(profiles: SessionProfile[]): void {
+/** Clear all legacy localStorage keys after migration */
+export function clearLegacyStorage(): void {
     try {
-        localStorage.setItem(SESSION_PROFILES_STORAGE_KEY, JSON.stringify(profiles))
-    } catch {
-        // Ignore storage errors
-    }
-}
-
-export function loadSelectedSessionProfileId(): string | null {
-    try {
-        const stored = localStorage.getItem(SELECTED_SESSION_PROFILE_STORAGE_KEY)
-        return stored && stored.trim() ? stored : null
-    } catch {
-        return null
-    }
-}
-
-export function saveSelectedSessionProfileId(profileId: string | null): void {
-    try {
-        if (!profileId) {
-            localStorage.removeItem(SELECTED_SESSION_PROFILE_STORAGE_KEY)
-            return
+        for (const key of LEGACY_STORAGE_KEYS) {
+            localStorage.removeItem(key)
         }
-        localStorage.setItem(SELECTED_SESSION_PROFILE_STORAGE_KEY, profileId)
     } catch {
         // Ignore storage errors
+    }
+}
+
+/** Check if there is legacy data to migrate */
+export function hasLegacyData(): boolean {
+    try {
+        return Boolean(localStorage.getItem(SESSION_PROFILES_STORAGE_KEY))
+    } catch {
+        return false
     }
 }

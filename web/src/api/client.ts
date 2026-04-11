@@ -22,6 +22,7 @@ import type {
     SessionResponse,
     SessionsResponse
 } from '@/types/api'
+import type { SessionProfile } from '@/components/NewSession/preferences'
 
 type ApiClientOptions = {
     baseUrl?: string
@@ -435,6 +436,23 @@ export class ApiClient {
         return await this.request('/api/voice/token', {
             method: 'POST',
             body: JSON.stringify(options || {})
+        })
+    }
+
+    async getProfiles(): Promise<SessionProfile[]> {
+        return await this.request<SessionProfile[]>('/api/profiles')
+    }
+
+    async saveProfile(profile: SessionProfile): Promise<void> {
+        await this.request(`/api/profiles/${encodeURIComponent(profile.id)}`, {
+            method: 'PUT',
+            body: JSON.stringify(profile),
+        })
+    }
+
+    async deleteProfile(profileId: string): Promise<void> {
+        await this.request(`/api/profiles/${encodeURIComponent(profileId)}`, {
+            method: 'DELETE',
         })
     }
 }

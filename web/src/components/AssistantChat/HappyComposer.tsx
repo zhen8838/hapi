@@ -787,10 +787,18 @@ export function HappyComposer(props: {
                                             <span>{message.attachments.length} {message.attachments.length === 1 ? 'file' : 'files'}</span>
                                         </div>
                                     ) : null}
-                                    <div className="px-4 py-3">
-                                        <div className="max-h-20 overflow-hidden whitespace-pre-wrap break-words text-base leading-snug text-[var(--app-fg)]" style={{ maskImage: message.text.length > 200 ? 'linear-gradient(to bottom, black 70%, transparent 100%)' : undefined, WebkitMaskImage: message.text.length > 200 ? 'linear-gradient(to bottom, black 70%, transparent 100%)' : undefined }}>
+                                    <div className="flex items-start gap-2 px-4 py-3">
+                                        <div className="min-w-0 flex-1 max-h-20 overflow-hidden whitespace-pre-wrap break-words text-base leading-snug text-[var(--app-fg)]" style={{ maskImage: message.text.length > 200 ? 'linear-gradient(to bottom, black 70%, transparent 100%)' : undefined, WebkitMaskImage: message.text.length > 200 ? 'linear-gradient(to bottom, black 70%, transparent 100%)' : undefined }}>
                                             {message.text.trim() || t('composer.queueAttachmentOnly')}
                                         </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => removeQueuedMessage(message.id)}
+                                            className="shrink-0 mt-0.5 rounded-full p-0.5 text-[var(--app-hint)] transition-colors hover:bg-[var(--app-subtle-bg)] hover:text-[var(--app-fg)]"
+                                            aria-label={t('composer.queueRemove')}
+                                        >
+                                            <QueueXIcon className="h-3.5 w-3.5" />
+                                        </button>
                                     </div>
                                 </div>
                             ))}

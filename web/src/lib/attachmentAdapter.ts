@@ -24,7 +24,10 @@ export function createAttachmentAdapter(api: ApiClient, sessionId: string): Atta
     }
 
     return {
-        accept: '*/*',
+        // Use '*' (not '*/*') so the library's ComposerAddAttachment check
+        // `if (attachmentAccept !== "*")` treats this as "all files" and does
+        // NOT set input.accept, allowing the native file picker to show all files.
+        accept: '*',
 
         async *add({ file }): AsyncGenerator<PendingAttachment> {
             const id = crypto.randomUUID()
@@ -106,7 +109,8 @@ export function createAttachmentAdapter(api: ApiClient, sessionId: string): Atta
                     path: result.path,
                     previewUrl
                 } as PendingUploadAttachment
-            } catch {
+            } catch (error) {
+                console.error('[attachmentAdapter] Upload failed:', error)
                 yield {
                     id,
                     type: 'file',

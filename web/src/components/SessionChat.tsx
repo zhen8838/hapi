@@ -323,12 +323,15 @@ export function SessionChat(props: {
         setForceScrollToken((token) => token + 1)
     }, [agentFlavor, props.availableSlashCommands, props.onSend, props.session.id, addToast, haptic, t])
 
-    const attachmentAdapter = useMemo(() => {
-        if (!props.session.active) {
-            return undefined
-        }
-        return createAttachmentAdapter(props.api, props.session.id)
-    }, [props.api, props.session.id, props.session.active])
+    // Always create the attachment adapter (even for inactive sessions) so that
+    // the file picker button is functional and errors are visible in the UI
+    // rather than silently swallowed. The server-side upload endpoint will reject
+    // uploads for inactive sessions with an error, which the adapter surfaces as
+    // an error-state attachment chip in the composer.
+    const attachmentAdapter = useMemo(
+        () => createAttachmentAdapter(props.api, props.session.id),
+        [props.api, props.session.id]
+    )
 
     const runtime = useHappyRuntime({
         session: props.session,

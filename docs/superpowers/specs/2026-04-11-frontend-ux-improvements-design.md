@@ -183,13 +183,14 @@ clearDraft(sessionId: string): void
 - File: `hub/src/web/routes/` (new route file or extend existing)
 - New API endpoints:
   - `GET /api/profiles` — read all `.json` files from `~/.hapi/profiles/`, return array
-  - `PUT /api/profiles/:id` — create or update `~/.hapi/profiles/{id}.json`
+  - `PUT /api/profiles/:id` — create or update `~/.hapi/profiles/{id}.json`. ID is generated client-side (using existing `makeClientSideId('profile')`) and passed in the URL.
   - `DELETE /api/profiles/:id` — delete profile file
 - Create `~/.hapi/profiles/` directory on first write if it doesn't exist
+- Return toast-friendly error messages on failure (file permission errors, disk full, etc.)
 
 ### Profile Schema Update
 
-Add two new fields to `SessionProfileConfig`:
+Add two new fields to `SessionProfileConfig` using proper protocol types:
 ```typescript
 type SessionProfileConfig = {
     agent: AgentType
@@ -200,16 +201,27 @@ type SessionProfileConfig = {
     sessionType: SessionType
     worktreeName: string
     additionalParameters: string[]
-    permissionMode: string          // NEW
-    collaborationMode: string       // NEW
+    permissionMode: PermissionMode          // NEW — uses protocol union type, agent-scoped
+    collaborationMode: CodexCollaborationMode // NEW — only applies when agent === 'codex'
 }
 ```
+
+Note: `permissionMode` values are agent-specific (Claude: `default`/`acceptEdits`/`bypassPermissions`/`plan`; Codex: `default`/`read-only`/`safe-yolo`/`yolo`; etc.). `applyProfile()` must validate that the stored `permissionMode` is valid for the profile's `agent` field. `collaborationMode` is only applied when `agent === 'codex'`.
+
+### Migration
+
+On first load after upgrade, run a one-time migration:
+1. Read `localStorage['hapi:newSession:profiles']`
+2. If non-empty, POST each profile to `PUT /api/profiles/:id`
+3. On success, clear all `hapi:newSession:*` localStorage keys
+4. On failure (backend unreachable), keep localStorage data and retry next load
 
 ### Frontend
 
 - File: `web/src/components/NewSession/preferences.ts`
   - Remove ALL localStorage persistence: `hapi:newSession:profiles`, `hapi:newSession:selectedProfileId`, `hapi:newSession:agent`, `hapi:newSession:yolo`
   - No fallback memory — opening New Session page always starts with hardcoded defaults (agent=claude, yolo=false, model=auto, effort=auto, etc.)
+  - **Intentional behavior change**: previously the selected profile persisted across page loads; now no profile is selected on open
 
 - File: `web/src/hooks/queries/` (new hook)
   - New `useProfiles()` hook using react-query to fetch/mutate profiles via API
@@ -233,14 +245,15 @@ type SessionProfileConfig = {
 ### Changes
 
 - File: `web/src/components/AssistantChat/HappyThread.tsx`
-- Replace or augment the existing `NewMessagesIndicator` (which only shows on pending messages):
-  - New circular button with down-arrow icon
+- **Replace** the existing `NewMessagesIndicator` with a new scroll-to-bottom button:
+  - Circular button with down-arrow icon, `aria-label="Scroll to bottom"`
   - Visible whenever `autoScrollEnabled === false` (i.e., user has scrolled up more than 120px from bottom)
-  - Positioned at bottom-center of the thread viewport
-  - On click: `scrollToBottom()` (existing function)
+  - Positioned `absolute bottom-20` within `ThreadPrimitive.Root` (same anchor as existing indicator), centered horizontally
+  - On click: `scrollToBottom()` (existing function) + `onFlushPending()` (existing function)
   - If there are also pending messages, show a count badge on the button
-- **Z-index / overlap with queue**: The button is positioned within the thread viewport (which ends above the composer area). Queue cards are rendered inside the composer area below the thread. No overlap possible since they are in different containers.
+- **Z-index / overlap with queue**: The button is positioned within `ThreadPrimitive.Root` which is a sibling to the composer area. No overlap possible since they are in different flex containers.
 - Style: circular, semi-transparent background, subtle shadow, similar to ChatGPT/Codex scroll button
+- Mobile: button appears on all screen sizes, same behavior
 
 **Complexity**: Low
 
@@ -256,18 +269,26 @@ type SessionProfileConfig = {
 - On mousedown: start tracking mouse movement, update sidebar width
 - Constraints:
   - Sidebar minimum width: 280px
-  - Chat area minimum width: 400px (calculated as `viewport - sidebarWidth`)
+  - Chat area minimum width: 400px
+  - Clamping formula: `sidebarWidth = clamp(280, dragWidth, viewportWidth - 400)`
   - When either minimum is reached, stop resizing
-- Persist sidebar width in `localStorage` so it survives page refresh
-- On mobile (< lg breakpoint): no change, sidebar still full-width toggle
+- Drag handle: `cursor: col-resize`, 4-6px wide invisible area
+- Persist sidebar width in `localStorage` key `hapi:sidebar:width`
+- Drag state: local `useState` in `SessionsPage` (no need for context)
+- On mobile (< lg breakpoint): no change, sidebar still full-width toggle, drag handle hidden
 
-### Remove Chat Max-Width
+### Remove Chat Max-Width (scoped to chat area only)
 
-- File: `web/tailwind.config.ts`
-  - Remove the `maxWidth: { content: '720px' }` custom theme extension
-- All elements using `max-w-content` class will now have no max-width constraint
-- Chat messages, headers, and other content will fill the available chat area width — no upper limit, user controls width via sidebar drag
-- Add reasonable horizontal padding (already exists as `px-3`) to prevent text hitting edges
+**Important**: The `max-w-content` Tailwind class (720px) is used in 15+ places across the codebase — not just the chat. Removing it from `tailwind.config.ts` would break layouts in settings, file viewer, terminal, and session list.
+
+**Approach**: Keep `max-w-content` in `tailwind.config.ts`. Instead, remove the `max-w-content` class only from chat-related components:
+- `web/src/components/AssistantChat/HappyThread.tsx` — message container
+- `web/src/components/AssistantChat/HappyComposer.tsx` — composer container
+- `web/src/components/SessionHeader.tsx` — session header
+- `web/src/router.tsx` — chat area header/error containers within `SessionsPage`
+
+Leave `max-w-content` intact on: settings page, file viewer, terminal, session list header.
+Chat content fills available width with no upper limit. Existing `px-3` padding prevents text hitting edges.
 
 **Complexity**: Medium
 
@@ -302,7 +323,7 @@ Items 1-4 are independent and can be parallelized.
 | `web/src/components/NewSession/preferences.ts` | Remove localStorage profile persistence, update schema |
 | `web/src/components/NewSession/ProfileSection.tsx` | New profile fields UI |
 | `web/src/router.tsx` | Resizable sidebar layout |
-| `web/tailwind.config.ts` | Remove `max-w-content: 720px` |
+| `web/src/components/SessionHeader.tsx` | Remove `max-w-content` class from chat header |
 | `web/src/api/client.ts` | `forkSession()` method, profile API methods |
 | `web/src/hooks/queries/useProfiles.ts` | **New file** — react-query hook for profiles |
 | `web/src/lib/draftStore.ts` | **New file** — draft persistence |

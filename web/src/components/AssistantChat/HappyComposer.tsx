@@ -34,6 +34,7 @@ import { getModelOptionsForFlavor, getNextModelForFlavor } from './modelOptions'
 import { getClaudeComposerEffortOptions } from './claudeEffortOptions'
 import { getCodexComposerReasoningEffortOptions } from './codexReasoningEffortOptions'
 import { extractQueuedAttachments, type QueuedComposerMessage } from './queuedMessages'
+import { getQueuedMessages, setQueuedMessages as saveQueuedMessages, clearQueuedMessages } from './queuedMessagesStore'
 
 export interface TextInputState {
     text: string
@@ -59,6 +60,7 @@ function QueueXIcon(props: { className?: string }) {
 }
 
 export function HappyComposer(props: {
+    sessionId: string
     disabled?: boolean
     permissionMode?: PermissionMode
     collaborationMode?: CodexCollaborationMode
@@ -176,7 +178,18 @@ export function HappyComposer(props: {
     const [isAborting, setIsAborting] = useState(false)
     const [isSwitching, setIsSwitching] = useState(false)
     const [showContinueHint, setShowContinueHint] = useState(false)
-    const [queuedMessages, setQueuedMessages] = useState<QueuedComposerMessage[]>([])
+    const [queuedMessages, setQueuedMessages] = useState<QueuedComposerMessage[]>(
+        () => getQueuedMessages(props.sessionId)
+    )
+
+    // Sync queued messages to sessionStorage whenever they change
+    useEffect(() => {
+        if (queuedMessages.length === 0) {
+            clearQueuedMessages(props.sessionId)
+        } else {
+            saveQueuedMessages(props.sessionId, queuedMessages)
+        }
+    }, [props.sessionId, queuedMessages])
 
     const textareaRef = useRef<HTMLTextAreaElement>(null)
     const prevControlledByUser = useRef(controlledByUser)

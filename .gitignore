@@ -44,3 +44,5 @@ docs/superpowers/
 # Generated npm bundle output (local)
 cli/npm/main/
 .ace-tool/
+.foundry/runs/
+.foundry/config.local.json

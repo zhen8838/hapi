@@ -261,8 +261,7 @@ export function SessionActionMenu(props: SessionActionMenuProps) {
                 {props.onFork && props.forkVisible ? (
                     <button type="button" role="menuitem"
                         className={`${baseItemClassName} hover:bg-[var(--app-subtle-bg)]`}
-                        onClick={() => { props.onFork?.(); props.onClose(); }}
-                        disabled={props.sessionActive}>
+                        onClick={() => { props.onFork?.(); props.onClose(); }}>
                         <ForkIcon className="text-[var(--app-hint)]" />
                         {t('session.action.fork')}
                     </button>

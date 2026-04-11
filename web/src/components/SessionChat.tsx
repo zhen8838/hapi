@@ -169,21 +169,17 @@ export function SessionChat(props: {
         blocksByIdRef.current.clear()
     }, [props.session.id])
 
-    // Draft persistence refs and callback
-    const draftPrevSessionIdRef = useRef<string | null>(null)
+    // Draft persistence: save text on every change, keyed by current session
+    const draftSessionIdRef = useRef<string>(props.session.id)
     const composerTextRef = useRef<string>('')
+
+    draftSessionIdRef.current = props.session.id
 
     const handleComposerTextChange = useCallback((text: string) => {
         composerTextRef.current = text
+        // Save draft on every text change (debounced by sessionStorage writes being cheap)
+        saveDraft(draftSessionIdRef.current, { text, attachments: [] })
     }, [])
-
-    useEffect(() => {
-        const prevId = draftPrevSessionIdRef.current
-        draftPrevSessionIdRef.current = props.session.id
-        if (prevId && prevId !== props.session.id) {
-            saveDraft(prevId, { text: composerTextRef.current, attachments: [] })
-        }
-    }, [props.session.id])
 
     const normalizedMessages: NormalizedMessage[] = useMemo(() => {
         // Clear caches immediately when session changes (before useEffect runs)
@@ -393,6 +389,7 @@ export function SessionChat(props: {
                     />
 
                     <HappyComposer
+                        key={props.session.id}
                         disabled={props.isSending}
                         permissionMode={props.session.permissionMode}
                         collaborationMode={codexCollaborationModeSupported ? props.session.collaborationMode : undefined}

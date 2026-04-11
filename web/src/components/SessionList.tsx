@@ -318,8 +318,23 @@ function SessionItem(props: {
                 onArchive={() => setArchiveOpen(true)}
                 onDelete={() => setDeleteOpen(true)}
                 onCopyId={() => {
-                    navigator.clipboard.writeText(s.id)
-                    addToast({ title: t('session.action.copyIdDone'), body: s.id, sessionId: s.id, url: '' })
+                    try {
+                        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                            navigator.clipboard.writeText(s.id).catch(() => {})
+                        } else {
+                            const textarea = document.createElement('textarea')
+                            textarea.value = s.id
+                            textarea.style.position = 'fixed'
+                            textarea.style.opacity = '0'
+                            document.body.appendChild(textarea)
+                            textarea.select()
+                            document.execCommand('copy')
+                            document.body.removeChild(textarea)
+                        }
+                    } catch {
+                        // ignore clipboard errors
+                    }
+                    addToast({ title: t('session.action.copyIdDone'), body: s.id, sessionId: '', url: '' })
                 }}
                 forkVisible={s.metadata?.flavor === 'claude'}
                 onFork={async () => {
@@ -333,7 +348,11 @@ function SessionItem(props: {
                         addToast({ title: t('session.action.forkSuccess'), body: '', sessionId: newSessionId, url: '' })
                         navigate({ to: '/sessions/$sessionId', params: { sessionId: newSessionId } })
                     } catch (error) {
-                        addToast({ title: t('session.action.forkError'), body: String(error), sessionId: s.id, url: '' })
+                        const msg = String(error)
+                        const body = msg.includes('resume_unavailable')
+                            ? 'This session has no Claude session ID. Try resuming it first, then fork.'
+                            : msg
+                        addToast({ title: t('session.action.forkError'), body, sessionId: '', url: '' })
                     }
                 }}
                 anchorPoint={menuAnchorPoint}

@@ -41,6 +41,22 @@ export interface TextInputState {
 
 const defaultSuggestionHandler = async (): Promise<Suggestion[]> => []
 
+function PaperclipIcon(props: { className?: string }) {
+    return (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={props.className}>
+            <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+        </svg>
+    )
+}
+
+function QueueXIcon(props: { className?: string }) {
+    return (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={props.className}>
+            <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+        </svg>
+    )
+}
+
 export function HappyComposer(props: {
     disabled?: boolean
     permissionMode?: PermissionMode
@@ -747,27 +763,29 @@ export function HappyComposer(props: {
                             {queuedMessages.map((message, index) => (
                                 <div
                                     key={message.id}
-                                    className="flex items-start gap-2 rounded-2xl border border-[var(--app-border)] bg-[var(--app-secondary-bg)] px-3 py-2 text-sm"
+                                    className="relative flex items-start gap-3 rounded-xl border-l-[3px] border-l-[var(--app-link)] bg-[var(--app-subtle-bg)] px-3 py-2.5 text-sm"
                                 >
+                                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--app-link)] text-[10px] font-bold text-white">
+                                        {index + 1}
+                                    </span>
                                     <div className="min-w-0 flex-1">
-                                        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--app-hint)]">
-                                            {t('composer.queueItem', { n: index + 1 })}
-                                        </div>
-                                        <div className="whitespace-pre-wrap break-words text-[13px] leading-snug text-[var(--app-fg)]">
+                                        <div className="max-h-20 overflow-hidden whitespace-pre-wrap break-words text-[13px] leading-snug text-[var(--app-fg)]" style={{ maskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)' }}>
                                             {message.text.trim() || t('composer.queueAttachmentOnly')}
                                         </div>
                                         {message.attachments && message.attachments.length > 0 ? (
-                                            <div className="mt-1 text-[11px] text-[var(--app-hint)]">
-                                                {t('composer.queueAttachments', { n: message.attachments.length })}
+                                            <div className="mt-1 flex items-center gap-1 text-[11px] text-[var(--app-hint)]">
+                                                <PaperclipIcon className="h-3 w-3" />
+                                                <span>{message.attachments.length}</span>
                                             </div>
                                         ) : null}
                                     </div>
                                     <button
                                         type="button"
-                                        className="rounded-full px-2 py-1 text-xs text-[var(--app-hint)] transition-colors hover:bg-[var(--app-subtle-bg)] hover:text-[var(--app-fg)]"
                                         onClick={() => removeQueuedMessage(message.id)}
+                                        className="shrink-0 rounded p-0.5 text-[var(--app-hint)] transition-colors hover:bg-[var(--app-secondary-bg)] hover:text-[var(--app-fg)]"
+                                        aria-label={t('composer.queueRemove')}
                                     >
-                                        {t('composer.queueRemove')}
+                                        <QueueXIcon className="h-3.5 w-3.5" />
                                     </button>
                                 </div>
                             ))}

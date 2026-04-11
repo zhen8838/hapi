@@ -468,9 +468,6 @@ export class SyncEngine {
         }
 
         const resumeToken = metadata.claudeSessionId
-        if (!resumeToken) {
-            return { type: 'error', message: 'Resume session ID unavailable', code: 'resume_unavailable' }
-        }
 
         const onlineMachines = this.machineCache.getOnlineMachinesByNamespace(namespace)
         if (onlineMachines.length === 0) {
@@ -493,6 +490,12 @@ export class SyncEngine {
             return { type: 'error', message: 'No machine online', code: 'no_machine_online' }
         }
 
+        // If claudeSessionId is available, use --resume <id> --fork-session
+        // Otherwise, fall back to --continue --fork-session (continues most recent session in same directory)
+        const additionalParams = resumeToken
+            ? ['--fork-session']
+            : ['--continue', '--fork-session']
+
         const spawnResult = await this.rpcGateway.spawnSession(
             targetMachine.id,
             metadata.path,
@@ -502,9 +505,9 @@ export class SyncEngine {
             undefined,
             undefined,
             undefined,
-            resumeToken,
+            resumeToken ?? undefined,   // undefined when no claudeSessionId → runner won't pass --resume
             session.effort ?? undefined,
-            ['--fork-session']
+            additionalParams
         )
 
         if (spawnResult.type !== 'success') {

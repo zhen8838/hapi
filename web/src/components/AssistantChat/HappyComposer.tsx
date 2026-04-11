@@ -366,15 +366,7 @@ export function HappyComposer(props: {
             return
         }
 
-        // Enter with suggestions visible: select the suggestion
-        if (key === 'Enter' && suggestions.length > 0) {
-            e.preventDefault()
-            const indexToSelect = selectedIndex >= 0 ? selectedIndex : 0
-            handleSuggestionSelect(indexToSelect)
-            return
-        }
-
-        // Ctrl/Cmd+Enter: send when idle, queue when running
+        // Ctrl/Cmd+Enter: send when idle, queue when running (checked before suggestions)
         if (key === 'Enter' && (e.metaKey || e.ctrlKey)) {
             e.preventDefault()
             if (canSend) {
@@ -386,6 +378,14 @@ export function HappyComposer(props: {
                 void enqueueCurrentComposer()
             }
             setShowContinueHint(false)
+            return
+        }
+
+        // Enter with suggestions visible: select the suggestion
+        if (key === 'Enter' && suggestions.length > 0) {
+            e.preventDefault()
+            const indexToSelect = selectedIndex >= 0 ? selectedIndex : 0
+            handleSuggestionSelect(indexToSelect)
             return
         }
 

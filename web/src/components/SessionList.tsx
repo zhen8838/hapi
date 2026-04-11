@@ -9,6 +9,7 @@ import { RenameSessionDialog } from '@/components/RenameSessionDialog'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { getSessionModelLabel } from '@/lib/sessionModelLabel'
 import { useTranslation } from '@/lib/use-translation'
+import { useToast } from '@/lib/toast-context'
 
 type SessionGroup = {
     key: string
@@ -209,6 +210,7 @@ function SessionItem(props: {
     selected?: boolean
 }) {
     const { t } = useTranslation()
+    const { addToast } = useToast()
     const { session: s, onSelect, showPath = true, api, selected = false } = props
     const { haptic } = usePlatform()
     const [menuOpen, setMenuOpen] = useState(false)
@@ -313,6 +315,10 @@ function SessionItem(props: {
                 onRename={() => setRenameOpen(true)}
                 onArchive={() => setArchiveOpen(true)}
                 onDelete={() => setDeleteOpen(true)}
+                onCopyId={() => {
+                    navigator.clipboard.writeText(s.id)
+                    addToast({ title: t('session.action.copyIdDone'), body: s.id, sessionId: s.id, url: '' })
+                }}
                 anchorPoint={menuAnchorPoint}
             />
 

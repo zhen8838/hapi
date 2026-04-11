@@ -63,6 +63,8 @@ export default {
   'session.action.archive': 'Archive',
   'session.action.delete': 'Delete',
   'session.action.copy': 'Copy',
+  'session.action.copyId': 'Copy Session ID',
+  'session.action.copyIdDone': 'Copied to clipboard',
 
   // Dialogs
   'dialog.rename.title': 'Rename Session',

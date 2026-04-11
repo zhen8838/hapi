@@ -16,6 +16,7 @@ type SessionActionMenuProps = {
     onRename: () => void
     onArchive: () => void
     onDelete: () => void
+    onCopyId?: () => void
     anchorPoint: { x: number; y: number }
     menuId?: string
 }
@@ -61,6 +62,14 @@ function ArchiveIcon(props: { className?: string }) {
     )
 }
 
+function ClipboardIcon(props: { className?: string }) {
+    return (
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={props.className}>
+            <rect width="8" height="4" x="8" y="2" rx="1" ry="1" /><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+        </svg>
+    )
+}
+
 function TrashIcon(props: { className?: string }) {
     return (
         <svg
@@ -99,6 +108,7 @@ export function SessionActionMenu(props: SessionActionMenuProps) {
         onRename,
         onArchive,
         onDelete,
+        onCopyId,
         anchorPoint,
         menuId
     } = props
@@ -229,6 +239,15 @@ export function SessionActionMenu(props: SessionActionMenuProps) {
                 aria-labelledby={headingId}
                 className="flex flex-col gap-1"
             >
+                {onCopyId ? (
+                    <button type="button" role="menuitem"
+                        className={`${baseItemClassName} hover:bg-[var(--app-subtle-bg)]`}
+                        onClick={() => { onCopyId?.(); onClose(); }}>
+                        <ClipboardIcon className="text-[var(--app-hint)]" />
+                        {t('session.action.copyId')}
+                    </button>
+                ) : null}
+
                 <button
                     type="button"
                     role="menuitem"

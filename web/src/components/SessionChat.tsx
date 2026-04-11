@@ -29,6 +29,7 @@ import { useSessionActions } from '@/hooks/mutations/useSessionActions'
 import { useVoiceOptional } from '@/lib/voice-context'
 import { RealtimeVoiceSession, registerSessionStore, registerVoiceHooksStore, voiceHooks } from '@/realtime'
 import { isRemoteTerminalSupported } from '@/utils/terminalSupport'
+import { saveDraft, loadDraft, clearDraft } from '@/lib/draftStore'
 
 export function SessionChat(props: {
     api: ApiClient
@@ -168,6 +169,22 @@ export function SessionChat(props: {
         blocksByIdRef.current.clear()
     }, [props.session.id])
 
+    // Draft persistence refs and callback
+    const draftPrevSessionIdRef = useRef<string | null>(null)
+    const composerTextRef = useRef<string>('')
+
+    const handleComposerTextChange = useCallback((text: string) => {
+        composerTextRef.current = text
+    }, [])
+
+    useEffect(() => {
+        const prevId = draftPrevSessionIdRef.current
+        draftPrevSessionIdRef.current = props.session.id
+        if (prevId && prevId !== props.session.id) {
+            saveDraft(prevId, { text: composerTextRef.current, attachments: [] })
+        }
+    }, [props.session.id])
+
     const normalizedMessages: NormalizedMessage[] = useMemo(() => {
         // Clear caches immediately when session changes (before useEffect runs)
         if (prevSessionIdRef.current !== null && prevSessionIdRef.current !== props.session.id) {
@@ -302,6 +319,7 @@ export function SessionChat(props: {
         }
 
         props.onSend(text, attachments)
+        clearDraft(props.session.id)
         setForceScrollToken((token) => token + 1)
     }, [agentFlavor, props.availableSlashCommands, props.onSend, props.session.id, addToast, haptic, t])
 
@@ -321,6 +339,9 @@ export function SessionChat(props: {
         attachmentAdapter,
         allowSendWhenInactive: true
     })
+
+    const draft = loadDraft(props.session.id)
+    const initialText = draft?.text ?? ''
 
     return (
         <div className="flex h-full min-h-0 flex-col">
@@ -398,6 +419,8 @@ export function SessionChat(props: {
                         onVoiceToggle={voice ? handleVoiceToggle : undefined}
                         onVoiceMicToggle={voice ? handleVoiceMicToggle : undefined}
                         onQueuedSend={handleSend}
+                        initialText={initialText}
+                        onTextChange={handleComposerTextChange}
                     />
                 </div>
             </AssistantRuntimeProvider>

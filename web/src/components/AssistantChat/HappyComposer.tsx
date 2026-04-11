@@ -85,6 +85,8 @@ export function HappyComposer(props: {
     onVoiceToggle?: () => void
     onVoiceMicToggle?: () => void
     onQueuedSend?: (text: string, attachments?: AttachmentMetadata[]) => void
+    initialText?: string
+    onTextChange?: (text: string) => void
 }) {
     const { t } = useTranslation()
     const {
@@ -127,6 +129,19 @@ export function HappyComposer(props: {
     const attachments = useAssistantState(({ composer }) => composer.attachments)
     const threadIsRunning = useAssistantState(({ thread }) => thread.isRunning)
     const threadIsDisabled = useAssistantState(({ thread }) => thread.isDisabled)
+
+    // Set initial text on mount
+    useEffect(() => {
+        if (props.initialText) {
+            api.composer().setText(props.initialText)
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+
+    // Report text changes to parent
+    useEffect(() => {
+        props.onTextChange?.(composerText)
+    }, [composerText, props.onTextChange])
 
     const controlsDisabled = disabled || (!active && !allowSendWhenInactive) || threadIsDisabled
     const trimmed = composerText.trim()

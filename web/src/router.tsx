@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import {
     Navigate,
@@ -110,6 +110,32 @@ function SessionsPage() {
     const { sessions, isLoading, error, refetch } = useSessions(api)
     const { machines } = useMachines(api, true)
 
+    const SIDEBAR_MIN = 280
+    const CHAT_MIN = 400
+    const SIDEBAR_STORAGE_KEY = 'hapi:sidebar:width'
+    const DEFAULT_SIDEBAR_WIDTH = 420
+
+    const [sidebarWidth, setSidebarWidth] = useState(() => {
+        try {
+            const stored = localStorage.getItem(SIDEBAR_STORAGE_KEY)
+            if (stored) return Math.max(SIDEBAR_MIN, parseInt(stored, 10))
+        } catch {}
+        return DEFAULT_SIDEBAR_WIDTH
+    })
+
+    const isDraggingRef = useRef(false)
+
+    const [isLgScreen, setIsLgScreen] = useState(() =>
+        typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches
+    )
+
+    useEffect(() => {
+        const mq = window.matchMedia('(min-width: 1024px)')
+        const handler = (e: MediaQueryListEvent) => setIsLgScreen(e.matches)
+        mq.addEventListener('change', handler)
+        return () => mq.removeEventListener('change', handler)
+    }, [])
+
     const handleRefresh = useCallback(() => {
         void refetch()
     }, [refetch])
@@ -124,6 +150,35 @@ function SessionsPage() {
         }
         return labels
     }, [machines])
+    const handleDragStart = useCallback((e: React.MouseEvent) => {
+        e.preventDefault()
+        isDraggingRef.current = true
+        document.body.style.cursor = 'col-resize'
+        document.body.style.userSelect = 'none'
+
+        const handleDragMove = (ev: MouseEvent) => {
+            if (!isDraggingRef.current) return
+            const maxWidth = window.innerWidth - CHAT_MIN
+            const clamped = Math.max(SIDEBAR_MIN, Math.min(ev.clientX, maxWidth))
+            setSidebarWidth(clamped)
+        }
+
+        const handleDragEnd = () => {
+            isDraggingRef.current = false
+            document.body.style.cursor = ''
+            document.body.style.userSelect = ''
+            document.removeEventListener('mousemove', handleDragMove)
+            document.removeEventListener('mouseup', handleDragEnd)
+            setSidebarWidth((w) => {
+                try { localStorage.setItem(SIDEBAR_STORAGE_KEY, String(w)) } catch {}
+                return w
+            })
+        }
+
+        document.addEventListener('mousemove', handleDragMove)
+        document.addEventListener('mouseup', handleDragEnd)
+    }, [])
+
     const sessionMatch = matchRoute({ to: '/sessions/$sessionId', fuzzy: true })
     const selectedSessionId = sessionMatch && sessionMatch.sessionId !== 'new' ? sessionMatch.sessionId : null
     const isSessionsIndex = pathname === '/sessions' || pathname === '/sessions/'
@@ -131,7 +186,8 @@ function SessionsPage() {
     return (
         <div className="flex h-full min-h-0">
             <div
-                className={`${isSessionsIndex ? 'flex' : 'hidden lg:flex'} w-full lg:w-[420px] xl:w-[480px] shrink-0 flex-col bg-[var(--app-bg)] lg:border-r lg:border-[var(--app-divider)]`}
+                className={`${isSessionsIndex ? 'flex' : 'hidden lg:flex'} w-full shrink-0 flex-col bg-[var(--app-bg)] lg:border-r lg:border-[var(--app-divider)]`}
+                style={isLgScreen ? { width: sidebarWidth, maxWidth: sidebarWidth } : undefined}
             >
                 <div className="bg-[var(--app-bg)] pt-[env(safe-area-inset-top)]">
                     <div className="mx-auto w-full max-w-content flex items-center justify-between px-3 py-2">
@@ -181,6 +237,13 @@ function SessionsPage() {
                     />
                 </div>
             </div>
+
+            {isLgScreen ? (
+                <div
+                    onMouseDown={handleDragStart}
+                    className="hidden lg:block w-1 cursor-col-resize bg-transparent hover:bg-[var(--app-link)]/20 transition-colors shrink-0"
+                />
+            ) : null}
 
             <div className={`${isSessionsIndex ? 'hidden lg:flex' : 'flex'} min-w-0 flex-1 flex-col bg-[var(--app-bg)]`}>
                 <div className="flex-1 min-h-0">

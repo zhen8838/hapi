@@ -477,6 +477,7 @@ export class ApiSessionClient extends EventEmitter {
         runtime?: {
             permissionMode?: SessionPermissionMode
             model?: SessionModel
+            modelReasoningEffort?: string | null
             effort?: string | null
             collaborationMode?: SessionCollaborationMode
         }

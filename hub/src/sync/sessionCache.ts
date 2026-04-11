@@ -4,6 +4,7 @@ import type { Store } from '../store'
 import { clampAliveTime } from './aliveTime'
 import { EventPublisher } from './eventPublisher'
 import { extractTodoWriteTodosFromMessageContent, TodosSchema } from './todos'
+import { extractBackgroundTaskDelta } from './backgroundTasks'
 
 export class SessionCache {
     private readonly sessions: Map<string, Session> = new Map()
@@ -61,9 +62,10 @@ export class SessionCache {
         agentState: unknown,
         namespace: string,
         model?: string,
-        effort?: string
+        effort?: string,
+        modelReasoningEffort?: string
     ): Session {
-        const stored = this.store.sessions.getOrCreateSession(tag, metadata, agentState, namespace, model, effort)
+        const stored = this.store.sessions.getOrCreateSession(tag, metadata, agentState, namespace, model, effort, modelReasoningEffort)
         return this.refreshSession(stored.id) ?? (() => { throw new Error('Failed to load session') })()
     }
 
@@ -131,9 +133,11 @@ export class SessionCache {
             agentStateVersion: stored.agentStateVersion,
             thinking: existing?.thinking ?? false,
             thinkingAt: existing?.thinkingAt ?? 0,
+            backgroundTaskCount: existing?.backgroundTaskCount ?? 0,
             todos,
             teamState,
             model: stored.model,
+            modelReasoningEffort: stored.modelReasoningEffort,
             effort: stored.effort,
             permissionMode: existing?.permissionMode,
             collaborationMode: existing?.collaborationMode
@@ -158,6 +162,7 @@ export class SessionCache {
         mode?: 'local' | 'remote'
         permissionMode?: PermissionMode
         model?: string | null
+        modelReasoningEffort?: string | null
         effort?: string | null
         collaborationMode?: CodexCollaborationMode
     }): void {
@@ -171,6 +176,7 @@ export class SessionCache {
         const wasThinking = session.thinking
         const previousPermissionMode = session.permissionMode
         const previousModel = session.model
+        const previousModelReasoningEffort = session.modelReasoningEffort
         const previousEffort = session.effort
         const previousCollaborationMode = session.collaborationMode
 
@@ -189,6 +195,14 @@ export class SessionCache {
             }
             session.model = payload.model
         }
+        if (payload.modelReasoningEffort !== undefined) {
+            if (payload.modelReasoningEffort !== session.modelReasoningEffort) {
+                this.store.sessions.setSessionModelReasoningEffort(payload.sid, payload.modelReasoningEffort, session.namespace, {
+                    touchUpdatedAt: false
+                })
+            }
+            session.modelReasoningEffort = payload.modelReasoningEffort
+        }
         if (payload.effort !== undefined) {
             if (payload.effort !== session.effort) {
                 this.store.sessions.setSessionEffort(payload.sid, payload.effort, session.namespace, {
@@ -205,6 +219,7 @@ export class SessionCache {
         const lastBroadcastAt = this.lastBroadcastAtBySessionId.get(session.id) ?? 0
         const modeChanged = previousPermissionMode !== session.permissionMode
             || previousModel !== session.model
+            || previousModelReasoningEffort !== session.modelReasoningEffort
             || previousEffort !== session.effort
             || previousCollaborationMode !== session.collaborationMode
         const shouldBroadcast = (!wasActive && session.active)
@@ -223,11 +238,28 @@ export class SessionCache {
                     thinking: session.thinking,
                     permissionMode: session.permissionMode,
                     model: session.model,
+                    modelReasoningEffort: session.modelReasoningEffort,
                     effort: session.effort,
                     collaborationMode: session.collaborationMode
                 }
             })
         }
+    }
+
+    applyBackgroundTaskDelta(sessionId: string, delta: { started: number; completed: number }): void {
+        const session = this.sessions.get(sessionId)
+        if (!session) return
+
+        const prev = session.backgroundTaskCount ?? 0
+        const next = Math.max(0, prev + delta.started - delta.completed)
+        if (next === prev) return
+
+        session.backgroundTaskCount = next
+        this.publisher.emit({
+            type: 'session-updated',
+            sessionId,
+            data: { backgroundTaskCount: next }
+        })
     }
 
     handleSessionEnd(payload: { sid: string; time: number }): void {
@@ -243,8 +275,9 @@ export class SessionCache {
         session.active = false
         session.thinking = false
         session.thinkingAt = t
+        session.backgroundTaskCount = 0
 
-        this.publisher.emit({ type: 'session-updated', sessionId: session.id, data: { active: false, thinking: false } })
+        this.publisher.emit({ type: 'session-updated', sessionId: session.id, data: { active: false, thinking: false, backgroundTaskCount: 0 } })
     }
 
     expireInactive(now: number = Date.now()): void {
@@ -264,6 +297,7 @@ export class SessionCache {
         config: {
             permissionMode?: PermissionMode
             model?: string | null
+            modelReasoningEffort?: string | null
             effort?: string | null
             collaborationMode?: CodexCollaborationMode
         }
@@ -286,6 +320,17 @@ export class SessionCache {
                 }
             }
             session.model = config.model
+        }
+        if (config.modelReasoningEffort !== undefined) {
+            if (config.modelReasoningEffort !== session.modelReasoningEffort) {
+                const updated = this.store.sessions.setSessionModelReasoningEffort(sessionId, config.modelReasoningEffort, session.namespace, {
+                    touchUpdatedAt: false
+                })
+                if (!updated) {
+                    throw new Error('Failed to update session model reasoning effort')
+                }
+            }
+            session.modelReasoningEffort = config.modelReasoningEffort
         }
         if (config.effort !== undefined) {
             if (config.effort !== session.effort) {
@@ -395,6 +440,15 @@ export class SessionCache {
             })
             if (!updated) {
                 throw new Error('Failed to preserve session model during merge')
+            }
+        }
+
+        if (newStored.modelReasoningEffort === null && oldStored.modelReasoningEffort !== null) {
+            const updated = this.store.sessions.setSessionModelReasoningEffort(newSessionId, oldStored.modelReasoningEffort, namespace, {
+                touchUpdatedAt: false
+            })
+            if (!updated) {
+                throw new Error('Failed to preserve session model reasoning effort during merge')
             }
         }
 

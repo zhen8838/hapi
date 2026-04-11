@@ -52,6 +52,25 @@ describe('session model', () => {
         expect(toSessionSummary(session).effort).toBe('high')
     })
 
+    it('persists explicit model reasoning effort on Codex sessions', () => {
+        const store = new Store(':memory:')
+        const events: SyncEvent[] = []
+        const cache = new SessionCache(store, createPublisher(events))
+
+        const session = cache.getOrCreateSession(
+            'session-model-reasoning-effort',
+            { path: '/tmp/project', host: 'localhost', flavor: 'codex' },
+            null,
+            'default',
+            'gpt-5.4',
+            undefined,
+            'xhigh'
+        )
+
+        expect(session.modelReasoningEffort).toBe('xhigh')
+        expect(store.sessions.getSession(session.id)?.modelReasoningEffort).toBe('xhigh')
+    })
+
     it('preserves model from old session when merging into resumed session', async () => {
         const store = new Store(':memory:')
         const events: SyncEvent[] = []
@@ -146,6 +165,30 @@ describe('session model', () => {
         expect(store.sessions.getSession(session.id)?.effort).toBeNull()
     })
 
+    it('persists applied session model reasoning effort updates, including clear-to-default', () => {
+        const store = new Store(':memory:')
+        const events: SyncEvent[] = []
+        const cache = new SessionCache(store, createPublisher(events))
+
+        const session = cache.getOrCreateSession(
+            'session-model-reasoning-config',
+            { path: '/tmp/project', host: 'localhost', flavor: 'codex' },
+            null,
+            'default',
+            'gpt-5.4',
+            undefined,
+            'high'
+        )
+
+        cache.applySessionConfig(session.id, { modelReasoningEffort: 'xhigh' })
+        expect(cache.getSession(session.id)?.modelReasoningEffort).toBe('xhigh')
+        expect(store.sessions.getSession(session.id)?.modelReasoningEffort).toBe('xhigh')
+
+        cache.applySessionConfig(session.id, { modelReasoningEffort: null })
+        expect(cache.getSession(session.id)?.modelReasoningEffort).toBeNull()
+        expect(store.sessions.getSession(session.id)?.modelReasoningEffort).toBeNull()
+    })
+
     it('persists keepalive effort changes, including clearing the effort', () => {
         const store = new Store(':memory:')
         const events: SyncEvent[] = []
@@ -169,6 +212,32 @@ describe('session model', () => {
 
         expect(cache.getSession(session.id)?.effort).toBeNull()
         expect(store.sessions.getSession(session.id)?.effort).toBeNull()
+    })
+
+    it('persists keepalive model reasoning effort changes, including clearing the value', () => {
+        const store = new Store(':memory:')
+        const events: SyncEvent[] = []
+        const cache = new SessionCache(store, createPublisher(events))
+
+        const session = cache.getOrCreateSession(
+            'session-model-reasoning-heartbeat',
+            { path: '/tmp/project', host: 'localhost', flavor: 'codex' },
+            null,
+            'default',
+            'gpt-5.4',
+            undefined,
+            'high'
+        )
+
+        cache.handleSessionAlive({
+            sid: session.id,
+            time: Date.now(),
+            thinking: false,
+            modelReasoningEffort: null
+        })
+
+        expect(cache.getSession(session.id)?.modelReasoningEffort).toBeNull()
+        expect(store.sessions.getSession(session.id)?.modelReasoningEffort).toBeNull()
     })
 
     it('tracks collaboration mode updates in memory from config and keepalive', () => {
@@ -228,13 +297,14 @@ describe('session model', () => {
             engine.handleMachineAlive({ machineId: 'machine-1', time: Date.now() })
 
             let capturedModel: string | undefined
+            let capturedModelReasoningEffort: string | undefined
             let capturedEffort: string | undefined
             ;(engine as any).rpcGateway.spawnSession = async (
                 _machineId: string,
                 _directory: string,
                 _agent: string,
                 model?: string,
-                _modelReasoningEffort?: string,
+                modelReasoningEffort?: string,
                 _yolo?: boolean,
                 _sessionType?: string,
                 _worktreeName?: string,
@@ -242,6 +312,7 @@ describe('session model', () => {
                 effort?: string
             ) => {
                 capturedModel = model
+                capturedModelReasoningEffort = modelReasoningEffort
                 capturedEffort = effort
                 return { type: 'success', sessionId: session.id }
             }
@@ -251,7 +322,63 @@ describe('session model', () => {
 
             expect(result).toEqual({ type: 'success', sessionId: session.id })
             expect(capturedModel).toBe('gpt-5.4')
+            expect(capturedModelReasoningEffort).toBeUndefined()
             expect(capturedEffort).toBeUndefined()
+        } finally {
+            engine.stop()
+        }
+    })
+
+    it('passes the stored model reasoning effort when respawning a resumed Codex session', async () => {
+        const store = new Store(':memory:')
+        const engine = new SyncEngine(
+            store,
+            {} as never,
+            new RpcRegistry(),
+            { broadcast() {} } as never
+        )
+
+        try {
+            const session = engine.getOrCreateSession(
+                'session-model-reasoning-resume',
+                {
+                    path: '/tmp/project',
+                    host: 'localhost',
+                    machineId: 'machine-1',
+                    flavor: 'codex',
+                    codexSessionId: 'codex-thread-1'
+                },
+                null,
+                'default',
+                'gpt-5.4',
+                undefined,
+                'xhigh'
+            )
+            engine.getOrCreateMachine(
+                'machine-1',
+                { host: 'localhost', platform: 'linux', happyCliVersion: '0.1.0' },
+                null,
+                'default'
+            )
+            engine.handleMachineAlive({ machineId: 'machine-1', time: Date.now() })
+
+            let capturedModelReasoningEffort: string | undefined
+            ;(engine as any).rpcGateway.spawnSession = async (
+                _machineId: string,
+                _directory: string,
+                _agent: string,
+                _model?: string,
+                modelReasoningEffort?: string
+            ) => {
+                capturedModelReasoningEffort = modelReasoningEffort
+                return { type: 'success', sessionId: session.id }
+            }
+            ;(engine as any).waitForSessionActive = async () => true
+
+            const result = await engine.resumeSession(session.id, 'default')
+
+            expect(result).toEqual({ type: 'success', sessionId: session.id })
+            expect(capturedModelReasoningEffort).toBe('xhigh')
         } finally {
             engine.stop()
         }

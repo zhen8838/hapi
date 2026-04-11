@@ -2,7 +2,7 @@
 
 ## Overview
 
-Six frontend improvements to enhance the HAPI web interface, inspired by Codex app design patterns. Changes span pure UI polish, new features, and a bug fix.
+Nine frontend/backend improvements to enhance the HAPI web interface, inspired by Codex app design patterns. Changes span UI polish, new features, infrastructure, and a bug fix.
 
 ## 1. Copy Session ID (Context Menu)
 
@@ -174,6 +174,103 @@ clearDraft(sessionId: string): void
 
 **Complexity**: Medium
 
+## 7. Profile File Persistence + Behavior Fix
+
+**Goal**: Migrate profiles from browser localStorage to file-based persistence at `~/.hapi/profiles/`, add missing config fields, and fix default selection behavior.
+
+### Backend
+
+- File: `hub/src/web/routes/` (new route file or extend existing)
+- New API endpoints:
+  - `GET /api/profiles` — read all `.json` files from `~/.hapi/profiles/`, return array
+  - `PUT /api/profiles/:id` — create or update `~/.hapi/profiles/{id}.json`
+  - `DELETE /api/profiles/:id` — delete profile file
+- Create `~/.hapi/profiles/` directory on first write if it doesn't exist
+
+### Profile Schema Update
+
+Add two new fields to `SessionProfileConfig`:
+```typescript
+type SessionProfileConfig = {
+    agent: AgentType
+    model: string
+    effort: ClaudeEffort
+    modelReasoningEffort: CodexReasoningEffort
+    yoloMode: boolean
+    sessionType: SessionType
+    worktreeName: string
+    additionalParameters: string[]
+    permissionMode: string          // NEW
+    collaborationMode: string       // NEW
+}
+```
+
+### Frontend
+
+- File: `web/src/components/NewSession/preferences.ts`
+  - Remove ALL localStorage persistence: `hapi:newSession:profiles`, `hapi:newSession:selectedProfileId`, `hapi:newSession:agent`, `hapi:newSession:yolo`
+  - No fallback memory — opening New Session page always starts with hardcoded defaults (agent=claude, yolo=false, model=auto, effort=auto, etc.)
+
+- File: `web/src/hooks/queries/` (new hook)
+  - New `useProfiles()` hook using react-query to fetch/mutate profiles via API
+
+- File: `web/src/components/NewSession/index.tsx`
+  - Replace localStorage calls with `useProfiles()` hook
+  - **Default behavior**: on page open, no profile is selected, all fields at defaults
+  - **On profile select**: `applyProfile()` fills all fields including new permissionMode/collaborationMode
+  - Update `saveProfile()` / `updateProfile()` to call PUT API
+  - Update `deleteProfile()` to call DELETE API
+
+- File: `web/src/components/NewSession/ProfileSection.tsx`
+  - Add permissionMode and collaborationMode to the profile save/display logic
+
+**Complexity**: High
+
+## 8. Scroll-to-Bottom Button
+
+**Goal**: Show a persistent down-arrow button whenever the chat scroll position is not at the bottom.
+
+### Changes
+
+- File: `web/src/components/AssistantChat/HappyThread.tsx`
+- Replace or augment the existing `NewMessagesIndicator` (which only shows on pending messages):
+  - New circular button with down-arrow icon
+  - Visible whenever `autoScrollEnabled === false` (i.e., user has scrolled up more than 120px from bottom)
+  - Positioned at bottom-center of the thread viewport
+  - On click: `scrollToBottom()` (existing function)
+  - If there are also pending messages, show a count badge on the button
+- **Z-index / overlap with queue**: The button is positioned within the thread viewport (which ends above the composer area). Queue cards are rendered inside the composer area below the thread. No overlap possible since they are in different containers.
+- Style: circular, semi-transparent background, subtle shadow, similar to ChatGPT/Codex scroll button
+
+**Complexity**: Low
+
+## 9. Resizable Sidebar + Remove Chat Max-Width
+
+**Goal**: Allow users to drag the sidebar edge to resize it, and remove the 720px content width cap so chat content fills available space.
+
+### Sidebar Resize
+
+- File: `web/src/router.tsx` (SessionsPage layout)
+- Replace fixed `lg:w-[420px] xl:w-[480px]` with a dynamic width controlled by state
+- Add a drag handle (invisible 4-6px wide area) on the sidebar's right edge
+- On mousedown: start tracking mouse movement, update sidebar width
+- Constraints:
+  - Sidebar minimum width: 280px
+  - Chat area minimum width: 400px (calculated as `viewport - sidebarWidth`)
+  - When either minimum is reached, stop resizing
+- Persist sidebar width in `localStorage` so it survives page refresh
+- On mobile (< lg breakpoint): no change, sidebar still full-width toggle
+
+### Remove Chat Max-Width
+
+- File: `web/tailwind.config.ts`
+  - Remove the `maxWidth: { content: '720px' }` custom theme extension
+- All elements using `max-w-content` class will now have no max-width constraint
+- Chat messages, headers, and other content will fill the available chat area width — no upper limit, user controls width via sidebar drag
+- Add reasonable horizontal padding (already exists as `px-3`) to prevent text hitting edges
+
+**Complexity**: Medium
+
 ## Implementation Order
 
 Recommended order by dependency and complexity:
@@ -181,11 +278,15 @@ Recommended order by dependency and complexity:
 1. **Copy Session ID** (low, standalone)
 2. **Sidebar indentation** (low, standalone)
 3. **Queue UI polish** (low, standalone)
-4. **Per-session draft persistence** (medium, standalone)
-5. **Image attachment bug fix** (medium, requires debugging)
-6. **Fork session** (high, requires backend changes)
+4. **Scroll-to-bottom button** (low, standalone)
+5. **Remove chat max-width** (low, standalone — part of #9)
+6. **Per-session draft persistence** (medium, standalone)
+7. **Resizable sidebar** (medium, standalone — part of #9)
+8. **Image attachment bug fix** (medium, requires debugging)
+9. **Profile file persistence** (high, requires backend)
+10. **Fork session** (high, requires backend)
 
-Items 1-3 are independent and can be parallelized.
+Items 1-4 are independent and can be parallelized.
 
 ## Files Affected
 
@@ -195,9 +296,17 @@ Items 1-3 are independent and can be parallelized.
 | `web/src/components/SessionActionMenu.tsx` | New menu items: Copy ID, Fork (new props: `onCopyId`, `onFork`, `forkEnabled`) |
 | `web/src/components/SessionChat.tsx` | Draft save/restore orchestration, pass `initialText` to composer |
 | `web/src/components/AssistantChat/HappyComposer.tsx` | Queue UI, accept `initialText` prop |
+| `web/src/components/AssistantChat/HappyThread.tsx` | Scroll-to-bottom button |
 | `web/src/components/AssistantChat/ComposerButtons.tsx` | Image attachment bug investigation |
-| `web/src/api/client.ts` | `forkSession()` method |
+| `web/src/components/NewSession/index.tsx` | Profile API integration, default behavior fix |
+| `web/src/components/NewSession/preferences.ts` | Remove localStorage profile persistence, update schema |
+| `web/src/components/NewSession/ProfileSection.tsx` | New profile fields UI |
+| `web/src/router.tsx` | Resizable sidebar layout |
+| `web/tailwind.config.ts` | Remove `max-w-content: 720px` |
+| `web/src/api/client.ts` | `forkSession()` method, profile API methods |
+| `web/src/hooks/queries/useProfiles.ts` | **New file** — react-query hook for profiles |
 | `web/src/lib/draftStore.ts` | **New file** — draft persistence |
 | `web/src/lib/attachmentAdapter.ts` | Image attachment bug fix (if needed) |
 | `hub/src/web/routes/sessions.ts` | Fork endpoint |
+| `hub/src/web/routes/profiles.ts` | **New file** — Profile CRUD endpoints |
 | `hub/src/sync/syncEngine.ts` | `forkSession()` method |

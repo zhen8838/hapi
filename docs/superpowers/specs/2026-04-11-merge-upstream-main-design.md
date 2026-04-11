@@ -33,7 +33,7 @@ Direct `git merge origin/main` — a single merge commit. Chosen over rebase (to
 
 ## Auto-Merged Files (No Conflicts)
 
-10 files modified on both branches will auto-merge:
+7 files modified on both branches will auto-merge (verified by dry-run):
 
 - `hub/src/sync/rpcGateway.ts`
 - `hub/src/sync/syncEngine.ts`
@@ -56,12 +56,19 @@ Plus all upstream-only files (no conflict possible).
 **Conflict zones:**
 1. **Import section** — trivial, keep both additions
 2. **Props definition** — trivial, keep both additions
-3. **`canSend` definition** — **design decision required**: upstream removed `!threadIsRunning` from canSend (allowing send while running). Our queue feature depends on the distinction between canSend (not running) and canQueue (running). **Resolution: keep our `!threadIsRunning` check on canSend** to preserve queue semantics.
-4. **Keyboard handler** — main conflict area. Resolution:
-   - Keep upstream's `Shift+Enter` = newline (return early, let textarea handle it)
-   - Keep upstream's suggestion selection on Enter
-   - For plain `Enter` (no modifiers): send if canSend, queue if canQueue (merging upstream's send logic with our queue fallback)
-   - Keep our `Ctrl/Cmd+Enter` as alternative send/queue shortcut
+3. **`canSend` definition** — **design decision required**: upstream removed `!threadIsRunning` from canSend (allowing send while running). Our queue feature depends on the distinction between canSend (not running) and canQueue (running). **Resolution: keep our `!threadIsRunning` check on canSend** to preserve queue semantics. Final expression:
+   ```ts
+   const canSend = (hasText || hasAttachments) && attachmentsReady && !controlsDisabled && !threadIsRunning
+   const canQueue = (hasText || hasAttachments) && attachmentsReady && !controlsDisabled && threadIsRunning
+   ```
+4. **Keyboard handler** — main conflict area. Final if-else order:
+   ```
+   1. Shift+Enter → return (let textarea insert newline, from upstream)
+   2. Enter + suggestions visible → select suggestion (from upstream)
+   3. Ctrl/Cmd+Enter → send if canSend, queue if canQueue (from ours)
+   4. Plain Enter (no modifiers) → send if canSend, queue if canQueue (merged)
+   ```
+   The Ctrl/Cmd+Enter check (step 3) must come BEFORE the plain Enter check (step 4) to avoid being swallowed. The Shift+Enter early return (step 1) must come first to prevent send/queue on Shift+Enter.
 5. **Settings overlay** — no conflict, upstream adds reasoning effort section in a different area than our queue UI
 6. **Voice props removal** — our change, upstream doesn't touch this. Keep our removal.
 7. **`submitOnEnter={false}`** — both sides made the same change. No conflict.
@@ -73,8 +80,10 @@ Plus all upstream-only files (no conflict possible).
 **Upstream changes:** Complete structural redesign — 3-level hierarchy (Machine -> Project -> Session), new types (`MachineGroup`), new components (`FlavorIcon`, `CopyPathButton`, `LoaderIcon`), new grouping function (`groupByMachine`), removed `getSessionModelLabel`/`getAgentLabel`, rewrote session list JSX.
 
 **Resolution:** Take upstream's redesign as the base (it's a structural rewrite, not a patch). Then re-apply our additions:
-- Add `useNavigate` and `useToast` imports
-- Add `onCopyId` and `onFork` handler props to `SessionItem`'s `<SessionActionMenu>` call
+- Add `useNavigate` and `useToast` imports to the file
+- Upstream preserves the `SessionItem` component name and its `<SessionActionMenu>` child — confirmed by reading the upstream diff
+- Add `onCopyId` and `onFork` handler props to `SessionItem`'s `<SessionActionMenu>` call (same prop interface as before)
+- Add `forkVisible` prop to `<SessionActionMenu>` (gated on `s.metadata?.flavor === 'claude'`)
 - The `onCopyId` and `onFork` callbacks are self-contained — they only touch the menu props, not the list structure
 
 Our border styling tweak (`pl-5` on the session group div) is superseded by upstream's complete layout rewrite and can be dropped.
@@ -98,7 +107,13 @@ After resolving conflicts:
 
 1. `npx tsc --noEmit` — typecheck passes
 2. `npm run build` (or equivalent) — build succeeds
-3. Manual smoke test: queue message feature works, fork session works, sidebar resize works, new upstream features (LaTeX, 3-level sidebar) render correctly
+3. Enter-key behavior regression:
+   - Shift+Enter inserts newline (not send)
+   - Plain Enter sends message when idle
+   - Plain Enter queues message when agent is running
+   - Ctrl/Cmd+Enter sends or queues (same logic as plain Enter)
+   - Enter with suggestions visible selects the suggestion
+4. Manual smoke test: queue message feature works, fork session works, sidebar resize works, new upstream features (LaTeX, 3-level sidebar, background task count) render correctly
 
 ## Rollback
 

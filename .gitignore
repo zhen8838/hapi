@@ -38,6 +38,9 @@ coverage/
 localdocs/
 execplan/
 
+# Superpowers specs/plans (local workflow docs)
+docs/superpowers/
+
 # Generated npm bundle output (local)
 cli/npm/main/
 .ace-tool/

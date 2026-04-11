@@ -61,14 +61,13 @@ Plus all upstream-only files (no conflict possible).
    const canSend = (hasText || hasAttachments) && attachmentsReady && !controlsDisabled && !threadIsRunning
    const canQueue = (hasText || hasAttachments) && attachmentsReady && !controlsDisabled && threadIsRunning
    ```
-4. **Keyboard handler** — main conflict area. Final if-else order:
+4. **Keyboard handler** — main conflict area. **Do NOT use upstream's Shift+Enter/plain Enter scheme.** Keep our Ctrl/Cmd+Enter approach. Final if-else order:
    ```
-   1. Shift+Enter → return (let textarea insert newline, from upstream)
-   2. Enter + suggestions visible → select suggestion (from upstream)
-   3. Ctrl/Cmd+Enter → send if canSend, queue if canQueue (from ours)
-   4. Plain Enter (no modifiers) → send if canSend, queue if canQueue (merged)
+   1. Enter + suggestions visible → select suggestion (from upstream)
+   2. Ctrl/Cmd+Enter → send if canSend, queue if canQueue (from ours)
+   3. Plain Enter → default textarea behavior (newline)
    ```
-   The Ctrl/Cmd+Enter check (step 3) must come BEFORE the plain Enter check (step 4) to avoid being swallowed. The Shift+Enter early return (step 1) must come first to prevent send/queue on Shift+Enter.
+   `submitOnEnter={false}` ensures plain Enter inserts a newline. Only Ctrl/Cmd+Enter triggers send/queue.
 5. **Settings overlay** — no conflict, upstream adds reasoning effort section in a different area than our queue UI
 6. **Voice props removal** — our change, upstream doesn't touch this. Keep our removal.
 7. **`submitOnEnter={false}`** — both sides made the same change. No conflict.
@@ -94,12 +93,19 @@ Our border styling tweak (`pl-5` on the session group div) is superseded by upst
 
 **Upstream changes:** Same sidebar resize feature extracted into `useSidebarResize` hook, uses pointer events, CSS variable `--sidebar-w`.
 
-**Resolution:** Take upstream's version entirely. Our inline implementation is functionally equivalent but upstream's is cleaner:
-- Hook extraction (`useSidebarResize`) follows project patterns
-- Pointer events have better cross-device support than mouse events
-- CSS variable approach is more flexible than inline style
+**Resolution:** Take upstream's `useSidebarResize` hook and router integration. Discard our inline resize code. Then apply one modification to the hook:
 
-Discard all our inline resize code (the useState, useRef, useEffect, handleDragStart, isLgScreen state).
+- **Keep upstream's `MAX_WIDTH = 600`** — sidebar should not exceed 600px
+- **Add chat area minimum width guard from our implementation** — modify the `clamp` function to also respect `window.innerWidth - CHAT_MIN` (where `CHAT_MIN = 400`):
+  ```ts
+  function clamp(value: number): number {
+      const maxAllowed = Math.min(MAX_WIDTH, window.innerWidth - CHAT_MIN)
+      return Math.min(maxAllowed, Math.max(MIN_WIDTH, value))
+  }
+  ```
+  This ensures the chat area always has at least 400px, even on smaller screens.
+
+Discard all our inline resize code (the useState, useRef, useEffect, handleDragStart, isLgScreen state) in `router.tsx`.
 
 ## Verification Steps
 
@@ -108,10 +114,9 @@ After resolving conflicts:
 1. `npx tsc --noEmit` — typecheck passes
 2. `npm run build` (or equivalent) — build succeeds
 3. Enter-key behavior regression:
-   - Shift+Enter inserts newline (not send)
-   - Plain Enter sends message when idle
-   - Plain Enter queues message when agent is running
-   - Ctrl/Cmd+Enter sends or queues (same logic as plain Enter)
+   - Plain Enter inserts newline (not send)
+   - Ctrl/Cmd+Enter sends message when idle
+   - Ctrl/Cmd+Enter queues message when agent is running
    - Enter with suggestions visible selects the suggestion
 4. Manual smoke test: queue message feature works, fork session works, sidebar resize works, new upstream features (LaTeX, 3-level sidebar, background task count) render correctly
 

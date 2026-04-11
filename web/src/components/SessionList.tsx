@@ -485,7 +485,7 @@ export function SessionList(props: {
                                 </div>
                             </button>
                             {!isCollapsed ? (
-                                <div className="flex flex-col divide-y divide-[var(--app-divider)] border-b border-[var(--app-divider)] border-l border-l-[var(--app-divider)]">
+                                <div className="flex flex-col divide-y divide-[var(--app-divider)] border-b border-[var(--app-divider)] border-l border-l-[var(--app-border)] pl-5">
                                     {group.sessions.map((s) => (
                                         <SessionItem
                                             key={s.id}

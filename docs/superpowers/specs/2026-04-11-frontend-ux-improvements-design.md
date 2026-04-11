@@ -39,12 +39,26 @@ Six frontend improvements to enhance the HAPI web interface, inspired by Codex a
 
 - File: `hub/src/web/routes/sessions.ts`
 - New endpoint: `POST /api/sessions/:id/fork`
-- Implementation: call `spawnSession()` with:
-  - `resumeSessionId`: the source session ID
-  - `additionalParameters`: `['--fork-session']`
-- Return the new session ID
+- Response: `{ sessionId: string }`
+
+- File: `hub/src/sync/syncEngine.ts`
+- New method: `forkSession(sessionId, namespace)` — mirrors `resumeSession()` logic:
+  1. Look up source session metadata (path, machineId, flavor, model, effort)
+  2. Validate flavor is `claude`, else return error
+  3. Resolve target machine (by machineId or hostname match, same as resume)
+  4. If target machine is offline, return error
+  5. Call `spawnSession()` with:
+     - `directory`: source session's path
+     - `resumeSessionId`: source session ID
+     - `additionalParameters`: `['--fork-session']`
+  6. Call `waitForSessionActive()` to block until the new session is ready
+  7. Return the new session ID
 - Claude CLI executes: `claude --resume <id> --fork-session`
 - Hook server receives new session's `SessionStart` event with a new session ID
+
+### Navigation
+
+- Frontend navigates to `/sessions/${newSessionId}` only after the fork API returns successfully (backend already waited for session to be active)
 
 ### Limitations
 
@@ -120,13 +134,16 @@ loadDraft(sessionId: string): Draft | null
 clearDraft(sessionId: string): void
 ```
 
-### Integration: `web/src/components/AssistantChat/HappyComposer.tsx`
+### Integration: `web/src/components/SessionChat.tsx` (NOT HappyComposer)
 
-- Track previous sessionId via `useRef`
+**Key constraint**: `HappyComposer` is keyed by `session.id` (`key={props.session.id}`), so it re-mounts on every session switch. Draft save/restore logic must live in the parent `SessionChat` component where `sessionId` is stable across switches.
+
+- `SessionChat` tracks previous sessionId via `useRef`
 - On sessionId change (`useEffect`):
-  1. Save current composer content to draft for the **old** sessionId
-  2. Load draft for the **new** sessionId and restore to composer
-- On successful message send: `clearDraft(sessionId)`
+  1. Save current composer text (read via `api.composer().getText()` or a callback ref) to draft for the **old** sessionId
+  2. Pass loaded draft for the **new** sessionId as `initialText` prop to `HappyComposer`
+- `HappyComposer`: accept optional `initialText` prop, call `api.composer().setText()` on mount if provided
+- On successful message send: `clearDraft(sessionId)` (called from `SessionChat`)
 
 **Persistence**: `sessionStorage` (survives page refresh within tab, cleared on tab close — appropriate for drafts).
 
@@ -138,14 +155,15 @@ clearDraft(sessionId: string): void
 
 **Symptom**: File picker opens, user selects an image, nothing happens (no upload, no preview, no error).
 
-### Investigation Plan
+### Investigation Plan (ordered by likelihood)
 
-- File: `web/src/lib/attachmentAdapter.ts`
-- Debug the `add()` flow step by step:
-  1. File type / MIME type filtering
-  2. `FileReader.readAsDataURL` for base64 conversion (may fail silently on large images)
-  3. `api.uploadFile()` call and error handling
-  4. Attachment state transition: `uploading` -> `requires-action`
+1. **File input handler** (`web/src/components/AssistantChat/ComposerButtons.tsx`):
+   - Verify the `<input type="file">` onChange handler calls `api.composer().addAttachment(file)`
+   - Check if `accept` attribute or other filtering rejects images
+2. **Async generator consumption** (`@assistant-ui/react` integration):
+   - Verify `@assistant-ui/react`'s `ComposerPrimitive.Attachments` correctly handles the async generator pattern from `attachmentAdapter.add()`
+3. **Attachment adapter** (`web/src/lib/attachmentAdapter.ts`):
+   - The adapter itself has error handling (size check, FileReader catch, upload error check), so it's less likely to be the culprit. Check only if steps 1-2 are clean.
 
 ### Fix Strategy
 
@@ -174,8 +192,12 @@ Items 1-3 are independent and can be parallelized.
 | File | Changes |
 |------|---------|
 | `web/src/components/SessionList.tsx` | Context menu (Copy ID, Fork), sidebar indentation |
-| `web/src/components/AssistantChat/HappyComposer.tsx` | Queue UI, draft integration |
+| `web/src/components/SessionActionMenu.tsx` | New menu items: Copy ID, Fork (new props: `onCopyId`, `onFork`, `forkEnabled`) |
+| `web/src/components/SessionChat.tsx` | Draft save/restore orchestration, pass `initialText` to composer |
+| `web/src/components/AssistantChat/HappyComposer.tsx` | Queue UI, accept `initialText` prop |
+| `web/src/components/AssistantChat/ComposerButtons.tsx` | Image attachment bug investigation |
 | `web/src/api/client.ts` | `forkSession()` method |
 | `web/src/lib/draftStore.ts` | **New file** — draft persistence |
-| `web/src/lib/attachmentAdapter.ts` | Image attachment bug fix |
+| `web/src/lib/attachmentAdapter.ts` | Image attachment bug fix (if needed) |
 | `hub/src/web/routes/sessions.ts` | Fork endpoint |
+| `hub/src/sync/syncEngine.ts` | `forkSession()` method |

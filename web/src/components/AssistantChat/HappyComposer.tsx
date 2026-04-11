@@ -775,33 +775,23 @@ export function HappyComposer(props: {
 
                     {queuedMessages.length > 0 ? (
                         <div className="mb-2 flex flex-col gap-2">
-                            {queuedMessages.map((message, index) => (
+                            {queuedMessages.map((message) => (
                                 <div
                                     key={message.id}
-                                    className="relative flex items-start gap-3 rounded-xl border-l-[3px] border-l-[var(--app-link)] bg-[var(--app-subtle-bg)] px-3 py-2.5 text-sm"
+                                    className="overflow-hidden rounded-[20px] bg-[var(--app-secondary-bg)]"
+                                    style={{ maxWidth: '85%' }}
                                 >
-                                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--app-link)] text-[10px] font-bold text-white">
-                                        {index + 1}
-                                    </span>
-                                    <div className="min-w-0 flex-1">
-                                        <div className="max-h-20 overflow-hidden whitespace-pre-wrap break-words text-[13px] leading-snug text-[var(--app-fg)]" style={{ maskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)' }}>
+                                    {message.attachments && message.attachments.length > 0 ? (
+                                        <div className="flex items-center gap-1 px-4 pt-2.5 text-[11px] text-[var(--app-hint)]">
+                                            <PaperclipIcon className="h-3 w-3" />
+                                            <span>{message.attachments.length} {message.attachments.length === 1 ? 'file' : 'files'}</span>
+                                        </div>
+                                    ) : null}
+                                    <div className="px-4 py-3">
+                                        <div className="max-h-20 overflow-hidden whitespace-pre-wrap break-words text-base leading-snug text-[var(--app-fg)]" style={{ maskImage: message.text.length > 200 ? 'linear-gradient(to bottom, black 70%, transparent 100%)' : undefined, WebkitMaskImage: message.text.length > 200 ? 'linear-gradient(to bottom, black 70%, transparent 100%)' : undefined }}>
                                             {message.text.trim() || t('composer.queueAttachmentOnly')}
                                         </div>
-                                        {message.attachments && message.attachments.length > 0 ? (
-                                            <div className="mt-1 flex items-center gap-1 text-[11px] text-[var(--app-hint)]">
-                                                <PaperclipIcon className="h-3 w-3" />
-                                                <span>{message.attachments.length}</span>
-                                            </div>
-                                        ) : null}
                                     </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => removeQueuedMessage(message.id)}
-                                        className="shrink-0 rounded p-0.5 text-[var(--app-hint)] transition-colors hover:bg-[var(--app-secondary-bg)] hover:text-[var(--app-fg)]"
-                                        aria-label={t('composer.queueRemove')}
-                                    >
-                                        <QueueXIcon className="h-3.5 w-3.5" />
-                                    </button>
                                 </div>
                             ))}
                         </div>

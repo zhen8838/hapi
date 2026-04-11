@@ -245,37 +245,75 @@ function getTodoProgress(session: SessionSummary): { completed: number; total: n
     return session.todoProgress
 }
 
-const FLAVOR_BADGES: Record<string, { label: string; colors: string }> = {
-    claude: {
-        label: 'Cl',
-        colors: 'bg-[#d97706] text-white',
-    },
-    codex: {
-        label: 'Cx',
-        colors: 'bg-[#111827] text-white',
-    },
-    cursor: {
-        label: 'Cu',
-        colors: 'bg-[#0f766e] text-white',
-    },
-    gemini: {
-        label: 'Gm',
-        colors: 'bg-[#2563eb] text-white',
-    },
-    opencode: {
-        label: 'Op',
-        colors: 'bg-[#15803d] text-white',
-    },
+/** Anthropic Claude logo — stylized starburst mark */
+function ClaudeLogo({ className }: { className?: string }) {
+    return (
+        <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M16.009 8.556 11.24 20.4h3.3l4.77-11.844h-3.3ZM7.99 8.556 4.69 18.094l-.017.05a1.478 1.478 0 0 0 1.395 1.968h.005l.062-.001a1.5 1.5 0 0 0 1.105-.68l.037-.058L12.76 8.556H7.99Z" fill="#d97706"/>
+            <path d="m7.99 8.556 1.2-2.976a1.496 1.496 0 0 1 2.772 0l1.2 2.976m3.848 0 1.2-2.976a1.496 1.496 0 0 0-1.386-.936h-.003a1.5 1.5 0 0 0-1.383.936L14.238 8.556" fill="#d97706"/>
+        </svg>
+    )
+}
+
+/** OpenAI Codex logo — hexagonal geometric mark */
+function CodexLogo({ className }: { className?: string }) {
+    return (
+        <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2L3 7v10l9 5 9-5V7l-9-5zm0 2.18L18.36 7.5 12 10.82 5.64 7.5 12 4.18zM5 9.06l6 3.33v6.55l-6-3.33V9.06zm8 9.88V12.4l6-3.33v6.55l-6 3.33z" fill="#111827"/>
+        </svg>
+    )
+}
+
+/** Google Gemini logo — four-pointed sparkle/star */
+function GeminiLogo({ className }: { className?: string }) {
+    return (
+        <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2C12 2 12 12 12 12C12 12 2 12 2 12C2 12 12 12 12 12C12 12 12 22 12 22C12 22 12 12 12 12C12 12 22 12 22 12C22 12 12 12 12 12C12 12 12 2 12 2Z" fill="url(#gemini-grad)"/>
+            <path d="M12 2C10.5 7.5 7.5 10.5 2 12C7.5 13.5 10.5 16.5 12 22C13.5 16.5 16.5 13.5 22 12C16.5 10.5 13.5 7.5 12 2Z" fill="url(#gemini-grad)"/>
+            <defs>
+                <linearGradient id="gemini-grad" x1="2" y1="2" x2="22" y2="22">
+                    <stop stopColor="#4285F4"/>
+                    <stop offset="0.5" stopColor="#9B72CB"/>
+                    <stop offset="1" stopColor="#D96570"/>
+                </linearGradient>
+            </defs>
+        </svg>
+    )
+}
+
+/** Cursor IDE logo — cursor arrow/pointer shape */
+function CursorLogo({ className }: { className?: string }) {
+    return (
+        <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M5.5 3.21V20.8c0 .45.54.67.85.35l4.86-4.86a.5.5 0 0 1 .35-.15h6.87a.5.5 0 0 0 .35-.85L6.35 2.86a.5.5 0 0 0-.85.35Z" fill="#0f766e"/>
+            <path d="M13.5 16.5L16 22l2.5-5.5" stroke="#0f766e" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+    )
+}
+
+/** OpenCode logo — angle brackets < / > */
+function OpenCodeLogo({ className }: { className?: string }) {
+    return (
+        <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8 7L3 12l5 5M16 7l5 5-5 5M14 4l-4 16" stroke="#15803d" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+    )
+}
+
+const FLAVOR_ICONS: Record<string, (className?: string) => React.ReactNode> = {
+    claude: (cls) => <ClaudeLogo className={cls} />,
+    codex: (cls) => <CodexLogo className={cls} />,
+    cursor: (cls) => <CursorLogo className={cls} />,
+    gemini: (cls) => <GeminiLogo className={cls} />,
+    opencode: (cls) => <OpenCodeLogo className={cls} />,
 }
 
 function FlavorIcon({ flavor, className }: { flavor?: string | null; className?: string }) {
-    const badge = FLAVOR_BADGES[(flavor ?? 'claude').trim().toLowerCase()] ?? FLAVOR_BADGES.claude
+    const key = (flavor ?? 'claude').trim().toLowerCase()
+    const renderIcon = FLAVOR_ICONS[key] ?? FLAVOR_ICONS.claude
     return (
-        <span
-            aria-hidden="true"
-            className={`inline-flex items-center justify-center rounded-sm text-[8px] font-semibold leading-none ${badge.colors} ${className ?? 'h-4 w-4'}`}
-        >
-            {badge.label}
+        <span aria-hidden="true" className={`inline-flex items-center justify-center ${className ?? 'h-4 w-4'}`}>
+            {renderIcon(className ?? 'h-4 w-4')}
         </span>
     )
 }

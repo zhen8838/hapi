@@ -12,6 +12,7 @@ import rehypeKatex from 'rehype-katex'
 import remarkDisableIndentedCode from '@/lib/remark-disable-indented-code'
 import { cn } from '@/lib/utils'
 import { SyntaxHighlighter } from '@/components/assistant-ui/shiki-highlighter'
+import { MermaidDiagram } from '@/components/MermaidDiagram'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import { CopyIcon, CheckIcon } from '@/components/icons'
 
@@ -201,6 +202,10 @@ function Image(props: ComponentPropsWithoutRef<'img'>) {
     return <img {...props} className={cn('aui-md-img max-w-full rounded', props.className)} />
 }
 
+export const COMPONENTS_BY_LANGUAGE: NonNullable<MarkdownTextPrimitiveProps['componentsByLanguage']> = {
+    mermaid: { SyntaxHighlighter: MermaidDiagram },
+}
+
 export const defaultComponents = memoizeMarkdownComponents({
     SyntaxHighlighter,
     CodeHeader,
@@ -236,6 +241,7 @@ export function MarkdownText() {
             remarkPlugins={MARKDOWN_PLUGINS}
             rehypePlugins={MARKDOWN_REHYPE_PLUGINS}
             components={defaultComponents}
+            componentsByLanguage={COMPONENTS_BY_LANGUAGE}
             className={cn('aui-md min-w-0 max-w-full break-words text-base')}
         />
     )

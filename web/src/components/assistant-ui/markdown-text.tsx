@@ -7,6 +7,7 @@ import {
 } from '@assistant-ui/react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
+import rehypeRaw from 'rehype-raw'
 import rehypeKatex from 'rehype-katex'
 import remarkDisableIndentedCode from '@/lib/remark-disable-indented-code'
 import { cn } from '@/lib/utils'
@@ -17,7 +18,10 @@ import { CopyIcon, CheckIcon } from '@/components/icons'
 import type { MarkdownTextPrimitiveProps } from '@assistant-ui/react-markdown'
 
 export const MARKDOWN_PLUGINS = [remarkGfm, remarkMath, remarkDisableIndentedCode] satisfies NonNullable<MarkdownTextPrimitiveProps['remarkPlugins']>
-export const MARKDOWN_REHYPE_PLUGINS = [rehypeKatex] satisfies NonNullable<MarkdownTextPrimitiveProps['rehypePlugins']>
+// Security: rehype-raw allows raw HTML passthrough from LLM output (trusted).
+// If user-to-user messaging is added later, rehype-sanitize must be inserted after rehype-raw.
+// rehype-raw MUST come before rehype-katex so raw HTML nodes are parsed before KaTeX processes math.
+export const MARKDOWN_REHYPE_PLUGINS = [rehypeRaw, rehypeKatex] satisfies NonNullable<MarkdownTextPrimitiveProps['rehypePlugins']>
 
 function CodeHeader(props: CodeHeaderProps) {
     const { copied, copy } = useCopyToClipboard()

@@ -7,17 +7,23 @@ import {
 } from '@assistant-ui/react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
+import rehypeRaw from 'rehype-raw'
 import rehypeKatex from 'rehype-katex'
 import remarkDisableIndentedCode from '@/lib/remark-disable-indented-code'
 import { cn } from '@/lib/utils'
 import { SyntaxHighlighter } from '@/components/assistant-ui/shiki-highlighter'
+import { MermaidDiagram } from '@/components/MermaidDiagram'
+import { PlantUMLDiagram } from '@/components/PlantUMLDiagram'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import { CopyIcon, CheckIcon } from '@/components/icons'
 
 import type { MarkdownTextPrimitiveProps } from '@assistant-ui/react-markdown'
 
 export const MARKDOWN_PLUGINS = [remarkGfm, remarkMath, remarkDisableIndentedCode] satisfies NonNullable<MarkdownTextPrimitiveProps['remarkPlugins']>
-export const MARKDOWN_REHYPE_PLUGINS = [rehypeKatex] satisfies NonNullable<MarkdownTextPrimitiveProps['rehypePlugins']>
+// Security: rehype-raw allows raw HTML passthrough from LLM output (trusted).
+// If user-to-user messaging is added later, rehype-sanitize must be inserted after rehype-raw.
+// rehype-raw MUST come before rehype-katex so raw HTML nodes are parsed before KaTeX processes math.
+export const MARKDOWN_REHYPE_PLUGINS = [rehypeRaw, rehypeKatex] satisfies NonNullable<MarkdownTextPrimitiveProps['rehypePlugins']>
 
 function CodeHeader(props: CodeHeaderProps) {
     const { copied, copy } = useCopyToClipboard()
@@ -197,6 +203,12 @@ function Image(props: ComponentPropsWithoutRef<'img'>) {
     return <img {...props} className={cn('aui-md-img max-w-full rounded', props.className)} />
 }
 
+export const COMPONENTS_BY_LANGUAGE: NonNullable<MarkdownTextPrimitiveProps['componentsByLanguage']> = {
+    mermaid: { SyntaxHighlighter: MermaidDiagram },
+    plantuml: { SyntaxHighlighter: PlantUMLDiagram },
+    puml: { SyntaxHighlighter: PlantUMLDiagram },
+}
+
 export const defaultComponents = memoizeMarkdownComponents({
     SyntaxHighlighter,
     CodeHeader,
@@ -232,6 +244,7 @@ export function MarkdownText() {
             remarkPlugins={MARKDOWN_PLUGINS}
             rehypePlugins={MARKDOWN_REHYPE_PLUGINS}
             components={defaultComponents}
+            componentsByLanguage={COMPONENTS_BY_LANGUAGE}
             className={cn('aui-md min-w-0 max-w-full break-words text-base')}
         />
     )

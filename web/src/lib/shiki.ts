@@ -37,6 +37,7 @@ const LANGS = [
     import('@shikijs/langs/graphql'),
     // Systems languages
     import('@shikijs/langs/c'),
+    import('@shikijs/langs/cpp'),
     import('@shikijs/langs/rust'),
     import('@shikijs/langs/go'),
     // JVM
@@ -84,6 +85,9 @@ export const langAlias: Record<string, string> = {
     py: 'python',
     rs: 'rust',
     kt: 'kotlin',
+    'c++': 'cpp',
+    cxx: 'cpp',
+    cc: 'cpp',
     cs: 'csharp',
     makefile: 'make',
 }

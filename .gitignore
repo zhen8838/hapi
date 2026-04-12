@@ -37,6 +37,9 @@ coverage/
 .claude/settings.local.json
 localdocs/
 execplan/
+tmp/
+.superpowers/
+.codex/
 
 # Superpowers specs/plans (local workflow docs)
 docs/superpowers/

@@ -2,6 +2,7 @@ import type { AttachmentAdapter, PendingAttachment, CompleteAttachment, Attachme
 import type { ApiClient } from '@/api/client'
 import type { AttachmentMetadata } from '@/types/api'
 import { isImageMimeType } from '@/lib/fileAttachments'
+import { uuid } from '@/utils/uuid'
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 const MAX_PREVIEW_BYTES = 5 * 1024 * 1024
@@ -30,7 +31,7 @@ export function createAttachmentAdapter(api: ApiClient, sessionId: string): Atta
         accept: '*',
 
         async *add({ file }): AsyncGenerator<PendingAttachment> {
-            const id = crypto.randomUUID()
+            const id = uuid()
             const contentType = file.type || 'application/octet-stream'
 
             yield {

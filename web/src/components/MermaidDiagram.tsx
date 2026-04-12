@@ -17,7 +17,7 @@ async function getMermaid() {
     if (!mermaidInitialized) {
         mermaidInstance.initialize({
             startOnLoad: false,
-            theme: 'dark',
+            theme: 'default',
             securityLevel: 'loose',
         })
         mermaidInitialized = true
@@ -90,7 +90,7 @@ export function MermaidDiagram(props: SyntaxHighlighterProps) {
 
     return (
         <div
-            className="mermaid-svg-container flex justify-center overflow-x-auto rounded-md bg-[var(--app-code-bg)] p-4"
+            className="mermaid-svg-container flex justify-center overflow-x-auto rounded-md bg-white p-4"
             dangerouslySetInnerHTML={{ __html: state.svg }}
         />
     )

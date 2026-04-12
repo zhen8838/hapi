@@ -13,6 +13,7 @@ import remarkDisableIndentedCode from '@/lib/remark-disable-indented-code'
 import { cn } from '@/lib/utils'
 import { SyntaxHighlighter } from '@/components/assistant-ui/shiki-highlighter'
 import { MermaidDiagram } from '@/components/MermaidDiagram'
+import { PlantUMLDiagram } from '@/components/PlantUMLDiagram'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import { CopyIcon, CheckIcon } from '@/components/icons'
 
@@ -204,6 +205,8 @@ function Image(props: ComponentPropsWithoutRef<'img'>) {
 
 export const COMPONENTS_BY_LANGUAGE: NonNullable<MarkdownTextPrimitiveProps['componentsByLanguage']> = {
     mermaid: { SyntaxHighlighter: MermaidDiagram },
+    plantuml: { SyntaxHighlighter: PlantUMLDiagram },
+    puml: { SyntaxHighlighter: PlantUMLDiagram },
 }
 
 export const defaultComponents = memoizeMarkdownComponents({

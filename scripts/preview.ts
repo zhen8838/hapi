@@ -24,8 +24,9 @@ const port = process.env.HAPI_LISTEN_PORT
     ? Number(process.env.HAPI_LISTEN_PORT)
     : await findFreePort()
 
-// Isolated data directory to avoid conflicts with running hapi instances
-const previewHome = join(tmpdir(), `hapi-preview-${port}`)
+// Use HAPI_HOME if set (persistent mode), otherwise use isolated temp directory
+const ispersistent = Boolean(process.env.HAPI_HOME)
+const previewHome = process.env.HAPI_HOME ?? join(tmpdir(), `hapi-preview-${port}`)
 mkdirSync(previewHome, { recursive: true })
 
 const repoRoot = join(import.meta.dir, '..')
@@ -123,7 +124,9 @@ const cleanup = () => {
         try { child.kill('SIGTERM') } catch {}
     }
     setTimeout(() => {
-        try { rmSync(previewHome, { recursive: true, force: true }) } catch {}
+        if (!ispersistent) {
+            try { rmSync(previewHome, { recursive: true, force: true }) } catch {}
+        }
         process.exit(0)
     }, 500)
 }
@@ -132,7 +135,9 @@ hub.on('exit', (code) => {
     for (const child of children) {
         if (child !== hub) try { child.kill('SIGTERM') } catch {}
     }
-    try { rmSync(previewHome, { recursive: true, force: true }) } catch {}
+    if (!ispersistent) {
+        try { rmSync(previewHome, { recursive: true, force: true }) } catch {}
+    }
     process.exit(code ?? 0)
 })
 

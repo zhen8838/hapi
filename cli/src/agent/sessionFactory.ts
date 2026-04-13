@@ -25,6 +25,7 @@ export type SessionBootstrapOptions = {
     model?: string
     modelReasoningEffort?: string
     effort?: string
+    additionalArgs?: string[]
     metadataOverrides?: Partial<Metadata>
 }
 
@@ -55,6 +56,7 @@ export function buildSessionMetadata(options: {
     workingDirectory: string
     machineId: string
     now?: number
+    additionalArgs?: string[]
     metadataOverrides?: Partial<Metadata>
 }): Metadata {
     const happyLibDir = runtimePath()
@@ -78,6 +80,7 @@ export function buildSessionMetadata(options: {
         lifecycleStateSince: now,
         flavor: options.flavor,
         worktree: worktreeInfo ?? undefined,
+        additionalArgs: options.additionalArgs,
         ...options.metadataOverrides
     }
 }
@@ -126,6 +129,7 @@ export async function bootstrapSession(options: SessionBootstrapOptions): Promis
         startedBy,
         workingDirectory,
         machineId,
+        additionalArgs: options.additionalArgs,
         metadataOverrides: options.metadataOverrides
     })
 

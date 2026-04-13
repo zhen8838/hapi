@@ -423,7 +423,8 @@ export class SyncEngine {
             undefined,
             undefined,
             resumeToken,
-            session.effort ?? undefined
+            session.effort ?? undefined,
+            metadata.additionalArgs ?? undefined
         )
 
         if (spawnResult.type !== 'success') {

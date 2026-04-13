@@ -57,7 +57,8 @@ export async function runClaude(options: StartOptions = {}): Promise<void> {
         workingDirectory,
         agentState: initialState,
         model: initialModel ?? undefined,
-        effort: initialEffort ?? undefined
+        effort: initialEffort ?? undefined,
+        additionalArgs: options.claudeArgs
     });
     logger.debug(`Session created: ${sessionInfo.id}`);
 

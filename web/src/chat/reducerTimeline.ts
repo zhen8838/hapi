@@ -32,6 +32,25 @@ export function reduceTimeline(
         }
     }
 
+    // Pre-scan: collect Skill tool call IDs.  The SDK injects the expanded
+    // skill prompt as a separate `type:'user'` message immediately after
+    // the Skill tool-result, but without `isMeta:true`.  We track these
+    // IDs so we can suppress the leaked prompt text in the main loop.
+    const skillToolCallIds = new Set<string>()
+    for (const msg of messages) {
+        if (msg.role !== 'agent') continue
+        for (const c of msg.content) {
+            if (c.type === 'tool-call' && c.name === 'Skill') {
+                skillToolCallIds.add(c.id)
+            }
+        }
+    }
+
+    // After a Skill tool-result, the SDK injects the expanded prompt as a
+    // separate user message.  We capture it and fold it into the Skill tool
+    // card's result instead of showing it inline.
+    let pendingSkillToolUseId: string | null = null
+
     for (const msg of messages) {
         if (msg.role === 'event') {
             if (msg.content.type === 'ready') {
@@ -61,6 +80,15 @@ export function reduceTimeline(
         }
 
         if (msg.role === 'user') {
+            // Fold Skill expansion text into the Skill tool card's result
+            if (pendingSkillToolUseId) {
+                const skillBlock = toolBlocksById.get(pendingSkillToolUseId)
+                if (skillBlock) {
+                    skillBlock.tool.result = msg.content.text
+                }
+                pendingSkillToolUseId = null
+                continue
+            }
             if (isCliOutputText(msg.content.text, msg.meta)) {
                 blocks.push(createCliOutputBlock({
                     id: msg.id,
@@ -269,6 +297,11 @@ export function reduceTimeline(
                     block.tool.result = c.content
                     block.tool.completedAt = msg.createdAt
                     block.tool.state = c.is_error ? 'error' : 'completed'
+
+                    // Mark that the next user-text is a Skill expansion
+                    if (skillToolCallIds.has(c.tool_use_id)) {
+                        pendingSkillToolUseId = c.tool_use_id
+                    }
                     continue
                 }
 

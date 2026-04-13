@@ -160,6 +160,118 @@ describe('reduceTimeline', () => {
         expect((events[0] as any).event.message).toBe('Background command stopped')
     })
 
+    it('folds Skill expansion text into the Skill tool card result', () => {
+        const skillExpansionText = '# Simplify: Code Review and Cleanup\n\nReview all changed files...'
+
+        const toolCallMsg: TracedMessage = {
+            id: 'msg-tc',
+            localId: null,
+            createdAt: 1_700_000_000_000,
+            role: 'agent',
+            content: [{ type: 'tool-call', id: 'tc-skill', name: 'Skill', input: { skill: 'simplify' }, description: null, uuid: 'u-tc', parentUUID: null }],
+            isSidechain: false
+        } as TracedMessage
+
+        const toolResultMsg: TracedMessage = {
+            id: 'msg-tr',
+            localId: null,
+            createdAt: 1_700_000_001_000,
+            role: 'agent',
+            content: [{ type: 'tool-result', tool_use_id: 'tc-skill', content: 'Launching skill: simplify', is_error: false, uuid: 'u-tr', parentUUID: null }],
+            isSidechain: false
+        } as TracedMessage
+
+        const expansionMsg: TracedMessage = {
+            id: 'msg-expand',
+            localId: null,
+            createdAt: 1_700_000_002_000,
+            role: 'user',
+            content: { type: 'text', text: skillExpansionText },
+            isSidechain: false
+        } as TracedMessage
+
+        const { blocks } = reduceTimeline(
+            [toolCallMsg, toolResultMsg, expansionMsg],
+            makeContext()
+        )
+
+        // No user-text block for the expansion
+        const userBlocks = blocks.filter(b => b.kind === 'user-text')
+        expect(userBlocks).toHaveLength(0)
+
+        // The Skill tool card should exist and its result should be the expansion text
+        const toolBlocks = blocks.filter(b => b.kind === 'tool-call')
+        expect(toolBlocks).toHaveLength(1)
+        expect(toolBlocks[0].kind === 'tool-call' && toolBlocks[0].tool.name).toBe('Skill')
+        expect(toolBlocks[0].kind === 'tool-call' && toolBlocks[0].tool.result).toBe(skillExpansionText)
+    })
+
+    it('does not suppress user text after non-Skill tool results', () => {
+        const toolCallMsg: TracedMessage = {
+            id: 'msg-tc',
+            localId: null,
+            createdAt: 1_700_000_000_000,
+            role: 'agent',
+            content: [{ type: 'tool-call', id: 'tc-bash', name: 'Bash', input: { command: 'ls' }, description: null, uuid: 'u-tc', parentUUID: null }],
+            isSidechain: false
+        } as TracedMessage
+
+        const toolResultMsg: TracedMessage = {
+            id: 'msg-tr',
+            localId: null,
+            createdAt: 1_700_000_001_000,
+            role: 'agent',
+            content: [{ type: 'tool-result', tool_use_id: 'tc-bash', content: 'file.txt', is_error: false, uuid: 'u-tr', parentUUID: null }],
+            isSidechain: false
+        } as TracedMessage
+
+        const userMsg = makeUserMessage('Thanks!', { id: 'msg-user', createdAt: 1_700_000_002_000 })
+
+        const { blocks } = reduceTimeline(
+            [toolCallMsg, toolResultMsg, userMsg],
+            makeContext()
+        )
+
+        const userBlocks = blocks.filter(b => b.kind === 'user-text')
+        expect(userBlocks).toHaveLength(1)
+    })
+
+    it('handles Skill tool call without subsequent user text', () => {
+        const toolCallMsg: TracedMessage = {
+            id: 'msg-tc',
+            localId: null,
+            createdAt: 1_700_000_000_000,
+            role: 'agent',
+            content: [{ type: 'tool-call', id: 'tc-skill', name: 'Skill', input: { skill: 'simplify' }, description: null, uuid: 'u-tc', parentUUID: null }],
+            isSidechain: false
+        } as TracedMessage
+
+        const toolResultMsg: TracedMessage = {
+            id: 'msg-tr',
+            localId: null,
+            createdAt: 1_700_000_001_000,
+            role: 'agent',
+            content: [{ type: 'tool-result', tool_use_id: 'tc-skill', content: 'Launching skill: simplify', is_error: false, uuid: 'u-tr', parentUUID: null }],
+            isSidechain: false
+        } as TracedMessage
+
+        const agentMsg = makeAgentMessage('I will now review the code.', { id: 'msg-agent', createdAt: 1_700_000_002_000 })
+
+        const { blocks } = reduceTimeline(
+            [toolCallMsg, toolResultMsg, agentMsg],
+            makeContext()
+        )
+
+        // Skill tool card keeps original result
+        const toolBlocks = blocks.filter(b => b.kind === 'tool-call')
+        expect(toolBlocks).toHaveLength(1)
+        expect(toolBlocks[0].kind === 'tool-call' && toolBlocks[0].tool.result).toBe('Launching skill: simplify')
+
+        // Agent text is still rendered
+        const textBlocks = blocks.filter(b => b.kind === 'agent-text')
+        expect(textBlocks).toHaveLength(1)
+    })
+
     it('suppresses sentinel reply to task-notification (summary path)', () => {
         const notifMsg: TracedMessage = {
             id: 'msg-notif',

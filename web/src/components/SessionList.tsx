@@ -434,12 +434,13 @@ function SessionItem(props: {
                 onArchive={() => setArchiveOpen(true)}
                 onDelete={() => setDeleteOpen(true)}
                 onCopyId={() => {
+                    const idToCopy = s.metadata?.agentSessionId ?? s.id
                     try {
                         if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-                            navigator.clipboard.writeText(s.id).catch(() => {})
+                            navigator.clipboard.writeText(idToCopy).catch(() => {})
                         } else {
                             const textarea = document.createElement('textarea')
-                            textarea.value = s.id
+                            textarea.value = idToCopy
                             textarea.style.position = 'fixed'
                             textarea.style.opacity = '0'
                             document.body.appendChild(textarea)
@@ -450,7 +451,7 @@ function SessionItem(props: {
                     } catch {
                         // ignore clipboard errors
                     }
-                    addToast({ title: t('session.action.copyIdDone'), body: s.id, sessionId: '', url: '' })
+                    addToast({ title: t('session.action.copyIdDone'), body: idToCopy, sessionId: '', url: '' })
                 }}
                 forkVisible={s.metadata?.flavor === 'claude'}
                 onFork={async () => {

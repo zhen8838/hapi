@@ -26,48 +26,56 @@ export const claudeCommand: CommandDefinition = {
 
         const options: StartOptions = {}
         let showHelp = false
-        const unknownArgs: string[] = []
+        const claudeArgs: string[] = []
+        const additionalArgs: string[] = []
 
         for (let i = 0; i < args.length; i++) {
             const arg = args[i]
 
             if (arg === '-h' || arg === '--help') {
                 showHelp = true
-                unknownArgs.push(arg)
+                claudeArgs.push(arg)
             } else if (arg === '--hapi-starting-mode') {
                 options.startingMode = z.enum(['local', 'remote']).parse(args[++i])
             } else if (arg === '--yolo') {
                 options.permissionMode = 'bypassPermissions'
-                unknownArgs.push('--dangerously-skip-permissions')
+                claudeArgs.push('--dangerously-skip-permissions')
             } else if (arg === '--dangerously-skip-permissions') {
                 options.permissionMode = 'bypassPermissions'
-                unknownArgs.push(arg)
+                claudeArgs.push(arg)
             } else if (arg === '--model') {
                 const model = args[++i]
                 if (!model) {
                     throw new Error('Missing --model value')
                 }
                 options.model = model
-                unknownArgs.push('--model', model)
+                claudeArgs.push('--model', model)
             } else if (arg === '--effort') {
                 const effort = args[++i]
                 if (!effort) {
                     throw new Error('Missing --effort value')
                 }
                 options.effort = effort
-                unknownArgs.push('--effort', effort)
+                claudeArgs.push('--effort', effort)
             } else if (arg === '--started-by') {
                 options.startedBy = args[++i] as 'runner' | 'terminal'
             } else {
-                unknownArgs.push(arg)
+                // Unknown args go to both: claudeArgs (for subprocess) and additionalArgs (for persistence)
+                claudeArgs.push(arg)
+                additionalArgs.push(arg)
                 if (i + 1 < args.length && !args[i + 1].startsWith('-')) {
-                    unknownArgs.push(args[++i])
+                    const value = args[++i]
+                    claudeArgs.push(value)
+                    additionalArgs.push(value)
                 }
             }
         }
 
-        if (unknownArgs.length > 0) {
-            options.claudeArgs = [...(options.claudeArgs || []), ...unknownArgs]
+        if (claudeArgs.length > 0) {
+            options.claudeArgs = claudeArgs
+        }
+        if (additionalArgs.length > 0) {
+            options.additionalArgs = additionalArgs
         }
 
         if (showHelp) {

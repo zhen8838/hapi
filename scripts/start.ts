@@ -15,7 +15,17 @@ const hubDir = join(repoRoot, 'hub')
 const cliDir = join(repoRoot, 'cli')
 const port = process.env.HAPI_LISTEN_PORT ?? '3006'
 
+const webDir = join(repoRoot, 'web')
 const children: ChildProcess[] = []
+
+// Build web before starting services
+console.log('[hapi] building web...')
+const buildResult = Bun.spawnSync(['bun', 'run', 'build'], { cwd: webDir, stdio: ['ignore', 'inherit', 'inherit'] })
+if (buildResult.exitCode !== 0) {
+    console.error('[hapi] web build failed, aborting')
+    process.exit(1)
+}
+console.log('[hapi] web build complete')
 
 // Cleanup all children on exit
 const cleanup = () => {

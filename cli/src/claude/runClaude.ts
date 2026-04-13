@@ -29,6 +29,7 @@ export interface StartOptions {
     shouldStartRunner?: boolean
     claudeEnvVars?: Record<string, string>
     claudeArgs?: string[]
+    additionalArgs?: string[]
     startedBy?: 'runner' | 'terminal'
 }
 
@@ -58,7 +59,7 @@ export async function runClaude(options: StartOptions = {}): Promise<void> {
         agentState: initialState,
         model: initialModel ?? undefined,
         effort: initialEffort ?? undefined,
-        additionalArgs: options.claudeArgs
+        additionalArgs: options.additionalArgs
     });
     logger.debug(`Session created: ${sessionInfo.id}`);
 

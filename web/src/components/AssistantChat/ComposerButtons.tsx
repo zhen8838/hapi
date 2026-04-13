@@ -235,6 +235,7 @@ export function ComposerButtons(props: {
     onSwitch: () => void
     canQueue: boolean
     onSend: () => void
+    children?: React.ReactNode
 }) {
     const { t } = useTranslation()
 
@@ -301,6 +302,8 @@ export function ComposerButtons(props: {
                         <SwitchToRemoteIcon />
                     </button>
                 ) : null}
+
+                {props.children}
             </div>
 
             <UnifiedButton

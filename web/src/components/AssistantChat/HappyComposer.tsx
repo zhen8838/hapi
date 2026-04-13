@@ -24,8 +24,12 @@ import { supportsEffort, supportsModelChange } from '@hapi/protocol'
 import { markSkillUsed } from '@/lib/recent-skills'
 import { FloatingOverlay } from '@/components/ChatInput/FloatingOverlay'
 import { Autocomplete } from '@/components/ChatInput/Autocomplete'
+import type { TodoItem } from '@hapi/protocol'
 import { StatusBar } from '@/components/AssistantChat/StatusBar'
 import { ComposerButtons } from '@/components/AssistantChat/ComposerButtons'
+import { ComposerIndicators, type IndicatorPanel, type TodoProgress } from '@/components/AssistantChat/ComposerIndicators'
+import { TodoDetailWindow } from '@/components/AssistantChat/TodoDetailWindow'
+import { BackgroundDetailWindow } from '@/components/AssistantChat/BackgroundDetailWindow'
 import { AttachmentItem } from '@/components/AssistantChat/AttachmentItem'
 import { useTranslation } from '@/lib/use-translation'
 import type { AttachmentMetadata } from '@/types/api'
@@ -62,6 +66,7 @@ function QueueXIcon(props: { className?: string }) {
 export function HappyComposer(props: {
     sessionId: string
     disabled?: boolean
+    todos?: TodoItem[]
     permissionMode?: PermissionMode
     collaborationMode?: CodexCollaborationMode
     model?: string | null
@@ -133,6 +138,14 @@ export function HappyComposer(props: {
     const model = rawModel ?? null
     const modelReasoningEffort = rawModelReasoningEffort ?? null
     const effort = rawEffort ?? null
+
+    const [activePanel, setActivePanel] = useState<IndicatorPanel>(null)
+
+    const todoProgress: TodoProgress = useMemo(() => {
+        if (!props.todos || props.todos.length === 0) return null
+        const completed = props.todos.filter(t => t.status === 'completed').length
+        return { items: props.todos, completed, total: props.todos.length }
+    }, [props.todos])
 
     const api = useAssistantApi()
     const composerText = useAssistantState(({ composer }) => composer.text)
@@ -941,8 +954,22 @@ export function HappyComposer(props: {
                             isSwitching={isSwitching}
                             onSwitch={handleSwitch}
                             onSend={handleSend}
-                        />
+                        >
+                            <ComposerIndicators
+                                todoProgress={todoProgress}
+                                backgroundTaskCount={backgroundTaskCount ?? 0}
+                                activePanel={activePanel}
+                                onTogglePanel={setActivePanel}
+                            />
+                        </ComposerButtons>
                     </div>
+
+                    {activePanel === 'todos' && todoProgress ? (
+                        <TodoDetailWindow progress={todoProgress} />
+                    ) : null}
+                    {activePanel === 'background' && (backgroundTaskCount ?? 0) > 0 ? (
+                        <BackgroundDetailWindow count={backgroundTaskCount ?? 0} />
+                    ) : null}
                 </ComposerPrimitive.Root>
             </div>
         </div>

@@ -411,6 +411,7 @@ export function SessionChat(props: {
                         key={props.session.id}
                         sessionId={props.session.id}
                         disabled={props.isSending}
+                        todos={props.session.todos}
                         permissionMode={props.session.permissionMode}
                         collaborationMode={codexCollaborationModeSupported ? props.session.collaborationMode : undefined}
                         model={props.session.model}

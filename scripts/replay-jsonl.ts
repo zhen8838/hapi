@@ -215,6 +215,34 @@ for (let i = 0; i < messages.length; i++) {
         null,
     )
 }
+// Extract todos from messages (last TodoWrite wins, same as hub)
+let lastTodos: unknown[] | null = null
+for (const msg of messages) {
+    const content = msg.content as Record<string, unknown>
+    if (content.role !== 'agent') continue
+    const inner = content.content as Record<string, unknown> | undefined
+    if (!inner || inner.type !== 'output') continue
+    const data = inner.data as Record<string, unknown> | undefined
+    if (!data || data.type !== 'assistant') continue
+    const message = data.message as Record<string, unknown> | undefined
+    if (!message) continue
+    const mc = message.content
+    if (!Array.isArray(mc)) continue
+    for (const block of mc) {
+        if ((block as Record<string, unknown>).type === 'tool_use' && (block as Record<string, unknown>).name === 'TodoWrite') {
+            const input = (block as Record<string, unknown>).input as Record<string, unknown> | undefined
+            if (input && Array.isArray(input.todos)) {
+                lastTodos = input.todos as unknown[]
+            }
+        }
+    }
+}
+if (lastTodos) {
+    db.prepare('UPDATE sessions SET todos = ? WHERE id = ?').run(JSON.stringify(lastTodos), sessionId)
+    const completed = lastTodos.filter((t: any) => t.status === 'completed').length
+    console.log(`Set todos: ${completed}/${lastTodos.length} completed`)
+}
+
 db.close()
 console.log(`Inserted ${messages.length} messages`)
 

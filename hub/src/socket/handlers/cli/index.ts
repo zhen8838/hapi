@@ -42,10 +42,11 @@ export type CliHandlersDeps = {
     onMachineAlive?: (payload: MachineAlivePayload) => void
     onWebappEvent?: (event: SyncEvent) => void
     onBackgroundTaskDelta?: (sessionId: string, delta: { started: number; completed: number }) => void
+    onBackgroundTaskEvent?: (sessionId: string, messageContent: unknown) => void
 }
 
 export function registerCliHandlers(socket: CliSocketWithData, deps: CliHandlersDeps): void {
-    const { io, store, rpcRegistry, terminalRegistry, onSessionAlive, onSessionEnd, onMachineAlive, onWebappEvent, onBackgroundTaskDelta } = deps
+    const { io, store, rpcRegistry, terminalRegistry, onSessionAlive, onSessionEnd, onMachineAlive, onWebappEvent, onBackgroundTaskDelta, onBackgroundTaskEvent } = deps
     const terminalNamespace = io.of('/terminal')
     const namespace = typeof socket.data.namespace === 'string' ? socket.data.namespace : null
 
@@ -105,7 +106,8 @@ export function registerCliHandlers(socket: CliSocketWithData, deps: CliHandlers
         onSessionAlive,
         onSessionEnd,
         onWebappEvent,
-        onBackgroundTaskDelta
+        onBackgroundTaskDelta,
+        onBackgroundTaskEvent
     })
     registerMachineHandlers(socket, {
         store,

@@ -12,7 +12,7 @@ import {
     useRef,
     useState
 } from 'react'
-import type { AgentState, CodexCollaborationMode, PermissionMode } from '@/types/api'
+import type { AgentState, CodexCollaborationMode, PermissionMode, Session } from '@/types/api'
 import type { Suggestion } from '@/hooks/useActiveSuggestions'
 import type { ConversationStatus } from '@/realtime/types'
 import { useActiveWord } from '@/hooks/useActiveWord'
@@ -27,8 +27,9 @@ import { Autocomplete } from '@/components/ChatInput/Autocomplete'
 import type { TodoItem } from '@hapi/protocol'
 import { StatusBar } from '@/components/AssistantChat/StatusBar'
 import { ComposerButtons } from '@/components/AssistantChat/ComposerButtons'
-import { ComposerIndicators, type TodoProgress } from '@/components/AssistantChat/ComposerIndicators'
+import { ComposerIndicators, type TodoProgress, type PanelKey } from '@/components/AssistantChat/ComposerIndicators'
 import { TodoDetailWindow } from '@/components/AssistantChat/TodoDetailWindow'
+import { BackgroundDetailWindow } from '@/components/AssistantChat/BackgroundDetailWindow'
 import { AttachmentItem } from '@/components/AssistantChat/AttachmentItem'
 import { useTranslation } from '@/lib/use-translation'
 import type { AttachmentMetadata } from '@/types/api'
@@ -76,6 +77,7 @@ export function HappyComposer(props: {
     thinking?: boolean
     agentState?: AgentState | null
     backgroundTaskCount?: number
+    backgroundTasks?: Session['backgroundTasks']
     contextSize?: number
     controlledByUser?: boolean
     agentFlavor?: string | null
@@ -138,7 +140,15 @@ export function HappyComposer(props: {
     const modelReasoningEffort = rawModelReasoningEffort ?? null
     const effort = rawEffort ?? null
 
-    const [showTodoPanel, setShowTodoPanel] = useState(false)
+    const [openPanels, setOpenPanels] = useState<Set<PanelKey>>(new Set())
+    const togglePanel = (key: PanelKey) => {
+        setOpenPanels(prev => {
+            const next = new Set(prev)
+            if (next.has(key)) next.delete(key)
+            else next.add(key)
+            return next
+        })
+    }
 
     const todoProgress: TodoProgress = useMemo(() => {
         if (!props.todos || props.todos.length === 0) return null
@@ -956,14 +966,29 @@ export function HappyComposer(props: {
                         >
                             <ComposerIndicators
                                 todoProgress={todoProgress}
-                                showTodoPanel={showTodoPanel}
-                                onToggleTodoPanel={() => setShowTodoPanel(v => !v)}
+                                backgroundTaskCount={backgroundTaskCount ?? 0}
+                                openPanels={openPanels}
+                                onTogglePanel={togglePanel}
                             />
                         </ComposerButtons>
                     </div>
 
-                    {showTodoPanel && todoProgress ? (
+                    {openPanels.has('todos') && todoProgress ? (
                         <TodoDetailWindow progress={todoProgress} />
+                    ) : null}
+                    {openPanels.has('agents') && (backgroundTaskCount ?? 0) > 0 ? (
+                        <BackgroundDetailWindow
+                            tasks={(props.backgroundTasks ?? []).filter(t => t.type === 'agent')}
+                            panelType="agents"
+                            onKillTask={(id) => { /* TODO: wire to RPC */ console.log('kill agent', id) }}
+                        />
+                    ) : null}
+                    {openPanels.has('shells') && (backgroundTaskCount ?? 0) > 0 ? (
+                        <BackgroundDetailWindow
+                            tasks={(props.backgroundTasks ?? []).filter(t => t.type === 'shell')}
+                            panelType="shells"
+                            onKillTask={(id) => { /* TODO: wire to RPC */ console.log('kill shell', id) }}
+                        />
                     ) : null}
                 </ComposerPrimitive.Root>
             </div>

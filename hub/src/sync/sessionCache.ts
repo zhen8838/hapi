@@ -4,12 +4,13 @@ import type { Store } from '../store'
 import { clampAliveTime } from './aliveTime'
 import { EventPublisher } from './eventPublisher'
 import { extractTodoWriteTodosFromMessageContent, TodosSchema } from './todos'
-import { extractBackgroundTaskDelta } from './backgroundTasks'
+import { extractBackgroundTaskDelta, BackgroundTaskTracker, type BackgroundTaskEvent, type BackgroundTask } from './backgroundTasks'
 
 export class SessionCache {
     private readonly sessions: Map<string, Session> = new Map()
     private readonly lastBroadcastAtBySessionId: Map<string, number> = new Map()
     private readonly todoBackfillAttemptedSessionIds: Set<string> = new Set()
+    private readonly taskTrackers: Map<string, BackgroundTaskTracker> = new Map()
 
     constructor(
         private readonly store: Store,
@@ -262,6 +263,57 @@ export class SessionCache {
         })
     }
 
+    getOrCreateTaskTracker(sessionId: string): BackgroundTaskTracker {
+        let tracker = this.taskTrackers.get(sessionId)
+        if (!tracker) {
+            tracker = new BackgroundTaskTracker()
+            this.taskTrackers.set(sessionId, tracker)
+        }
+        return tracker
+    }
+
+    processBackgroundTaskEvent(sessionId: string, event: BackgroundTaskEvent): void {
+        const session = this.sessions.get(sessionId)
+        if (!session) return
+
+        const tasks = session.backgroundTasks ? [...session.backgroundTasks] : []
+        let changed = false
+
+        for (const started of event.started) {
+            if (!tasks.some(t => t.id === started.id)) {
+                tasks.push(started)
+                changed = true
+            }
+        }
+
+        for (const completion of event.completed) {
+            const idx = tasks.findIndex(t => t.id === completion.taskId || t.toolUseId === completion.taskId)
+            if (idx >= 0) {
+                tasks[idx] = {
+                    ...tasks[idx],
+                    status: 'completed',
+                    completedAt: Date.now(),
+                    summary: completion.summary,
+                }
+                changed = true
+            }
+        }
+
+        if (!changed) return
+
+        session.backgroundTasks = tasks
+        session.backgroundTaskCount = tasks.filter(t => t.status === 'running').length
+
+        this.publisher.emit({
+            type: 'session-updated',
+            sessionId,
+            data: {
+                backgroundTaskCount: session.backgroundTaskCount,
+                backgroundTasks: session.backgroundTasks
+            }
+        })
+    }
+
     handleSessionEnd(payload: { sid: string; time: number }): void {
         const t = clampAliveTime(payload.time) ?? Date.now()
 
@@ -276,8 +328,10 @@ export class SessionCache {
         session.thinking = false
         session.thinkingAt = t
         session.backgroundTaskCount = 0
+        session.backgroundTasks = undefined
+        this.taskTrackers.delete(session.id)
 
-        this.publisher.emit({ type: 'session-updated', sessionId: session.id, data: { active: false, thinking: false, backgroundTaskCount: 0 } })
+        this.publisher.emit({ type: 'session-updated', sessionId: session.id, data: { active: false, thinking: false, backgroundTaskCount: 0, backgroundTasks: [] } })
     }
 
     expireInactive(now: number = Date.now()): void {

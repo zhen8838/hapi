@@ -29,6 +29,35 @@ function getUserSkillsRoots(): string[] {
     ];
 }
 
+async function getInstalledPluginSkillsRoots(): Promise<string[]> {
+    const home = getHomeDirectory();
+    const installedPath = join(home, '.claude', 'plugins', 'installed_plugins.json');
+    try {
+        const content = await readFile(installedPath, 'utf-8');
+        const data = JSON.parse(content);
+        const plugins = data?.plugins ?? data;
+        if (!plugins || typeof plugins !== 'object') return [];
+
+        const roots: string[] = [];
+        const seen = new Set<string>();
+        for (const entries of Object.values(plugins)) {
+            if (!Array.isArray(entries)) continue;
+            for (const entry of entries) {
+                const installPath = entry?.installPath;
+                if (typeof installPath !== 'string') continue;
+                const skillsDir = join(installPath, 'skills');
+                if (!seen.has(skillsDir)) {
+                    seen.add(skillsDir);
+                    roots.push(skillsDir);
+                }
+            }
+        }
+        return roots;
+    } catch {
+        return [];
+    }
+}
+
 function getAdminSkillsRoot(): string {
     return join('/etc', 'codex', 'skills');
 }
@@ -114,7 +143,26 @@ async function listTopLevelSkillDirs(skillsRoot: string): Promise<string[]> {
                 continue;
             }
 
-            result.push(join(skillsRoot, entry.name));
+            const dirPath = join(skillsRoot, entry.name);
+            // If this directory has a SKILL.md, it's a skill
+            if (await pathExists(join(dirPath, 'SKILL.md'))) {
+                result.push(dirPath);
+            } else {
+                // Otherwise check one level deeper (e.g. superpowers/brainstorming/SKILL.md)
+                try {
+                    const subEntries = await readdir(dirPath, { withFileTypes: true });
+                    for (const sub of subEntries) {
+                        if (sub.isDirectory() && !sub.name.startsWith('.')) {
+                            const subPath = join(dirPath, sub.name);
+                            if (await pathExists(join(subPath, 'SKILL.md'))) {
+                                result.push(subPath);
+                            }
+                        }
+                    }
+                } catch {
+                    // ignore unreadable subdirectories
+                }
+            }
         }
 
         return result;
@@ -139,16 +187,19 @@ async function readSkillsFromDirs(skillDirs: string[]): Promise<SkillSummary[]> 
 
 export async function listSkills(workingDirectory?: string): Promise<SkillSummary[]> {
     const projectRoots = await listProjectSkillsRoots(workingDirectory);
-    const [projectSkillDirs, userSkillDirs, adminSkillDirs] = await Promise.all([
+    const pluginRoots = await getInstalledPluginSkillsRoots();
+    const [projectSkillDirs, userSkillDirs, adminSkillDirs, pluginSkillDirs] = await Promise.all([
         Promise.all(projectRoots.map(async (root) => await listTopLevelSkillDirs(root))).then((dirs) => dirs.flat()),
         Promise.all(getUserSkillsRoots().map(async (root) => await listTopLevelSkillDirs(root))).then((dirs) => dirs.flat()),
         listTopLevelSkillDirs(getAdminSkillsRoot()),
+        Promise.all(pluginRoots.map(async (root) => await listTopLevelSkillDirs(root))).then((dirs) => dirs.flat()),
     ]);
 
-    const [projectSkills, userSkills, adminSkills] = await Promise.all([
+    const [projectSkills, userSkills, adminSkills, pluginSkills] = await Promise.all([
         readSkillsFromDirs(projectSkillDirs),
         readSkillsFromDirs(userSkillDirs),
         readSkillsFromDirs(adminSkillDirs),
+        readSkillsFromDirs(pluginSkillDirs),
     ]);
 
     const dedupedSkills = new Map<string, SkillSummary>();
@@ -156,6 +207,7 @@ export async function listSkills(workingDirectory?: string): Promise<SkillSummar
         ...projectSkills,
         ...userSkills,
         ...adminSkills,
+        ...pluginSkills,
     ]) {
         if (!dedupedSkills.has(skill.name)) {
             dedupedSkills.set(skill.name, skill);

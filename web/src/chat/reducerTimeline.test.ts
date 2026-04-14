@@ -272,6 +272,45 @@ describe('reduceTimeline', () => {
         expect(textBlocks).toHaveLength(1)
     })
 
+    it('filters TodoWrite tool-call and tool-result from chat', () => {
+        const toolCallMsg: TracedMessage = {
+            id: 'msg-tc',
+            localId: null,
+            createdAt: 1_700_000_000_000,
+            role: 'agent',
+            content: [{
+                type: 'tool-call', id: 'tc-todo', name: 'TodoWrite',
+                input: { todos: [{ content: 'Fix bug', status: 'in_progress' }] },
+                description: null, uuid: 'u-tc', parentUUID: null
+            }],
+            isSidechain: false
+        } as TracedMessage
+
+        const toolResultMsg: TracedMessage = {
+            id: 'msg-tr',
+            localId: null,
+            createdAt: 1_700_000_001_000,
+            role: 'agent',
+            content: [{ type: 'tool-result', tool_use_id: 'tc-todo', content: 'ok', is_error: false, uuid: 'u-tr', parentUUID: null }],
+            isSidechain: false
+        } as TracedMessage
+
+        const textMsg = makeAgentMessage('Working on it now.', { id: 'msg-text', createdAt: 1_700_000_002_000 })
+
+        const { blocks } = reduceTimeline(
+            [toolCallMsg, toolResultMsg, textMsg],
+            makeContext()
+        )
+
+        // No tool-call blocks (TodoWrite filtered)
+        const toolBlocks = blocks.filter(b => b.kind === 'tool-call')
+        expect(toolBlocks).toHaveLength(0)
+
+        // Agent text is still rendered
+        const textBlocks = blocks.filter(b => b.kind === 'agent-text')
+        expect(textBlocks).toHaveLength(1)
+    })
+
     it('suppresses sentinel reply to task-notification (summary path)', () => {
         const notifMsg: TracedMessage = {
             id: 'msg-notif',

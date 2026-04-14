@@ -27,9 +27,8 @@ import { Autocomplete } from '@/components/ChatInput/Autocomplete'
 import type { TodoItem } from '@hapi/protocol'
 import { StatusBar } from '@/components/AssistantChat/StatusBar'
 import { ComposerButtons } from '@/components/AssistantChat/ComposerButtons'
-import { ComposerIndicators, type IndicatorPanel, type TodoProgress } from '@/components/AssistantChat/ComposerIndicators'
+import { ComposerIndicators, type TodoProgress } from '@/components/AssistantChat/ComposerIndicators'
 import { TodoDetailWindow } from '@/components/AssistantChat/TodoDetailWindow'
-import { BackgroundDetailWindow } from '@/components/AssistantChat/BackgroundDetailWindow'
 import { AttachmentItem } from '@/components/AssistantChat/AttachmentItem'
 import { useTranslation } from '@/lib/use-translation'
 import type { AttachmentMetadata } from '@/types/api'
@@ -139,7 +138,7 @@ export function HappyComposer(props: {
     const modelReasoningEffort = rawModelReasoningEffort ?? null
     const effort = rawEffort ?? null
 
-    const [activePanel, setActivePanel] = useState<IndicatorPanel>(null)
+    const [showTodoPanel, setShowTodoPanel] = useState(false)
 
     const todoProgress: TodoProgress = useMemo(() => {
         if (!props.todos || props.todos.length === 0) return null
@@ -957,18 +956,14 @@ export function HappyComposer(props: {
                         >
                             <ComposerIndicators
                                 todoProgress={todoProgress}
-                                backgroundTaskCount={backgroundTaskCount ?? 0}
-                                activePanel={activePanel}
-                                onTogglePanel={setActivePanel}
+                                showTodoPanel={showTodoPanel}
+                                onToggleTodoPanel={() => setShowTodoPanel(v => !v)}
                             />
                         </ComposerButtons>
                     </div>
 
-                    {activePanel === 'todos' && todoProgress ? (
+                    {showTodoPanel && todoProgress ? (
                         <TodoDetailWindow progress={todoProgress} />
-                    ) : null}
-                    {activePanel === 'background' && (backgroundTaskCount ?? 0) > 0 ? (
-                        <BackgroundDetailWindow count={backgroundTaskCount ?? 0} />
                     ) : null}
                 </ComposerPrimitive.Root>
             </div>

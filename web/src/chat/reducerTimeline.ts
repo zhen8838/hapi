@@ -32,16 +32,20 @@ export function reduceTimeline(
         }
     }
 
-    // Pre-scan: collect Skill tool call IDs.  The SDK injects the expanded
-    // skill prompt as a separate `type:'user'` message immediately after
-    // the Skill tool-result, but without `isMeta:true`.  We track these
-    // IDs so we can suppress the leaked prompt text in the main loop.
+    // Pre-scan: collect Skill and TodoWrite tool call IDs.
+    // - Skill: SDK injects the expanded prompt as a separate user message
+    //   without isMeta, so we suppress it and fold it into the tool card.
+    // - TodoWrite: rendered in the composer indicator, not in chat.
     const skillToolCallIds = new Set<string>()
+    const todoWriteToolCallIds = new Set<string>()
     for (const msg of messages) {
         if (msg.role !== 'agent') continue
         for (const c of msg.content) {
             if (c.type === 'tool-call' && c.name === 'Skill') {
                 skillToolCallIds.add(c.id)
+            }
+            if (c.type === 'tool-call' && c.name === 'TodoWrite') {
+                todoWriteToolCallIds.add(c.id)
             }
         }
     }
@@ -202,6 +206,11 @@ export function reduceTimeline(
                 }
 
                 if (c.type === 'tool-call') {
+                    // TodoWrite is rendered in the composer indicator, not in chat
+                    if (c.name === 'TodoWrite') {
+                        continue
+                    }
+
                     if (isChangeTitleToolName(c.name)) {
                         const title = context.titleChangesByToolUseId.get(c.id) ?? extractTitleFromChangeTitleInput(c.input)
                         if (title && !context.emittedTitleChangeToolUseIds.has(c.id)) {
@@ -247,6 +256,11 @@ export function reduceTimeline(
                 }
 
                 if (c.type === 'tool-result') {
+                    // Skip TodoWrite results (rendered in composer indicator)
+                    if (todoWriteToolCallIds.has(c.tool_use_id)) {
+                        continue
+                    }
+
                     const title = context.titleChangesByToolUseId.get(c.tool_use_id) ?? null
                     if (title) {
                         if (!context.emittedTitleChangeToolUseIds.has(c.tool_use_id)) {

@@ -9,7 +9,7 @@ export type TodoProgress = {
 function TodoRing({ completed, total }: { completed: number; total: number }) {
     const pct = total > 0 ? (completed / total) * 100 : 0
     return (
-        <svg width="14" height="14" viewBox="0 0 36 36">
+        <svg width="18" height="18" viewBox="0 0 36 36">
             <path
                 d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                 fill="none"
@@ -35,24 +35,21 @@ type ComposerIndicatorsProps = {
 }
 
 export function ComposerIndicators({ todoProgress, showTodoPanel, onToggleTodoPanel }: ComposerIndicatorsProps) {
-    if (!todoProgress || todoProgress.total === 0) return null
+    const hasTodos = todoProgress !== null && todoProgress.total > 0
 
     return (
-        <>
-            <div className="mx-1 h-4 w-px bg-[var(--app-border)]" />
-            <button
-                type="button"
-                onClick={onToggleTodoPanel}
-                className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-colors ${
-                    showTodoPanel
-                        ? 'bg-[var(--app-bg)] text-[var(--app-fg)]'
-                        : 'text-[var(--app-fg)]/60 hover:bg-[var(--app-bg)] hover:text-[var(--app-fg)]'
-                }`}
-                title={`Tasks: ${todoProgress.completed}/${todoProgress.total}`}
-            >
-                <TodoRing completed={todoProgress.completed} total={todoProgress.total} />
-                <span>{todoProgress.completed}/{todoProgress.total}</span>
-            </button>
-        </>
+        <button
+            type="button"
+            onClick={onToggleTodoPanel}
+            disabled={!hasTodos}
+            className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                showTodoPanel
+                    ? 'bg-[var(--app-bg)] text-[var(--app-fg)]'
+                    : 'text-[var(--app-fg)]/60 hover:bg-[var(--app-bg)] hover:text-[var(--app-fg)]'
+            }`}
+            title={hasTodos ? `Tasks: ${todoProgress!.completed}/${todoProgress!.total}` : 'No tasks'}
+        >
+            <TodoRing completed={todoProgress?.completed ?? 0} total={todoProgress?.total ?? 0} />
+        </button>
     )
 }

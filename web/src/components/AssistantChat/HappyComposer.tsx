@@ -296,7 +296,7 @@ export function HappyComposer(props: {
     const switchDisabled = controlsDisabled || isSwitching || !controlledByUser
     const showSwitchButton = Boolean(controlledByUser && onSwitchToRemote)
     const showTerminalButton = Boolean(onTerminal || terminalUnsupported)
-    const terminalDisabled = controlsDisabled || terminalUnsupported
+    const terminalDisabled = controlsDisabled || terminalUnsupported || !active
     const terminalLabel = terminalUnsupported ? t('terminal.unsupportedWindows') : t('composer.terminal')
 
     useEffect(() => {

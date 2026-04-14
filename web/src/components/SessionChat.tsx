@@ -439,8 +439,8 @@ export function SessionChat(props: {
                         }
                         onEffortChange={handleEffortChange}
                         onSwitchToRemote={handleSwitchToRemote}
-                        onTerminal={props.session.active && terminalSupported ? handleViewTerminal : undefined}
-                        terminalUnsupported={props.session.active && !terminalSupported}
+                        onTerminal={terminalSupported ? handleViewTerminal : undefined}
+                        terminalUnsupported={!terminalSupported}
                         autocompleteSuggestions={props.autocompleteSuggestions}
                         voiceStatus={voice?.status}
                         voiceMicMuted={voice?.micMuted}

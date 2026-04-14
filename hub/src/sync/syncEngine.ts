@@ -207,6 +207,14 @@ export class SyncEngine {
         this.sessionCache.applyBackgroundTaskDelta(sessionId, delta)
     }
 
+    handleBackgroundTaskEvent(sessionId: string, messageContent: unknown): void {
+        const tracker = this.sessionCache.getOrCreateTaskTracker(sessionId)
+        const event = tracker.processMessage(messageContent)
+        if (event) {
+            this.sessionCache.processBackgroundTaskEvent(sessionId, event)
+        }
+    }
+
     handleMachineAlive(payload: { machineId: string; time: number }): void {
         this.machineCache.handleMachineAlive(payload)
     }

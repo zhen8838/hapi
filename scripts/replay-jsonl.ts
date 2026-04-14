@@ -168,9 +168,15 @@ function parseInput(filePath: string): MessageRow[] {
 // Main
 // ---------------------------------------------------------------------------
 
+// Parse --bg-tasks flag
+const bgTasksArgIdx = process.argv.indexOf('--bg-tasks')
+const bgTasksCount: number = bgTasksArgIdx >= 0
+    ? parseInt(process.argv[bgTasksArgIdx + 1], 10) || 0
+    : 0
+
 const filePath = process.argv[2]
 if (!filePath) {
-    console.error('Usage: bun run scripts/replay-jsonl.ts <path> [--port PORT]')
+    console.error('Usage: bun run scripts/replay-jsonl.ts <path> [--port PORT] [--bg-tasks N]')
     process.exit(1)
 }
 
@@ -245,6 +251,125 @@ if (lastTodos) {
 
 db.close()
 console.log(`Inserted ${messages.length} messages`)
+
+// Inject background task signals via Socket.IO if requested
+if (bgTasksCount > 0) {
+    console.log(`\nInjecting ${bgTasksCount} background task(s) via Socket.IO...`)
+    const { io } = await import('socket.io-client')
+    const socket = io(`${hubBase}/cli`, {
+        auth: { token: cliToken, sessionId, machineId: REPLAY_MACHINE_ID },
+        transports: ['websocket'],
+    })
+    await new Promise<void>((resolve, reject) => {
+        socket.on('connect', resolve)
+        socket.on('connect_error', reject)
+        setTimeout(() => reject(new Error('Socket.IO connect timeout')), 5000)
+    })
+
+    // Emit session-alive to register the session as active
+    socket.emit('session-alive', { sid: sessionId, time: Date.now(), thinking: false })
+    await new Promise(r => setTimeout(r, 200))
+
+    // Sample background tasks: mix of agents and shells with realistic data
+    const sampleTasks = [
+        // Agents
+        {
+            toolName: 'Agent',
+            toolUseId: `toolu_agent_${randomUUID().slice(0, 8)}`,
+            input: {
+                description: 'Explore Hub architecture and routing',
+                prompt: 'You are a system architecture analyst. Examine the hub/src directory structure and report on the routing, middleware, and Socket.IO handler patterns.',
+                subagent_type: 'Explore',
+                run_in_background: true,
+            },
+            resultText: (id: string) => `Async agent launched successfully.\nagentId: ${id} (internal ID - do not mention to user. Use SendMessage with the agent's name to communicate.)`,
+        },
+        {
+            toolName: 'Agent',
+            toolUseId: `toolu_agent_${randomUUID().slice(0, 8)}`,
+            input: {
+                description: 'Analyze CLI command structure',
+                prompt: 'Analyze the CLI package structure, commands, and how they interact with the hub via Socket.IO.',
+                subagent_type: 'general-purpose',
+                run_in_background: true,
+            },
+            resultText: (id: string) => `Async agent launched successfully.\nagentId: ${id} (internal ID)`,
+        },
+        // Shells
+        {
+            toolName: 'Bash',
+            toolUseId: `toolu_bash_${randomUUID().slice(0, 8)}`,
+            input: {
+                command: 'find . -name "*.ts" -not -path "*/node_modules/*" | head -200 | while read f; do wc -l "$f"; done',
+                description: 'Count lines in TypeScript files',
+                run_in_background: true,
+            },
+            resultText: (id: string) => `Command running in background with ID: ${id}. Output is being written to: /tmp/bg-${id}.output`,
+        },
+        {
+            toolName: 'Bash',
+            toolUseId: `toolu_bash_${randomUUID().slice(0, 8)}`,
+            input: {
+                command: 'for dir in cli hub web shared; do echo "=== $dir ===" && find "$dir/src" -name "*.ts" -o -name "*.tsx" 2>/dev/null | while read f; do grep -c "import" "$f"; done; done',
+                description: 'Analyze imports per package',
+                run_in_background: true,
+            },
+            resultText: (id: string) => `Command running in background with ID: ${id}. Output is being written to: /tmp/bg-${id}.output`,
+        },
+    ]
+
+    const tasksToInject = sampleTasks.slice(0, bgTasksCount)
+
+    for (let i = 0; i < tasksToInject.length; i++) {
+        const task = tasksToInject[i]
+        const taskId = `bg-${task.toolName.toLowerCase()}-${i + 1}`
+
+        // Phase 1: Send assistant message with tool_use (for tracker to extract pending info)
+        const assistantMessage = {
+            role: 'agent',
+            content: {
+                type: 'output',
+                data: {
+                    type: 'assistant',
+                    message: {
+                        role: 'assistant',
+                        content: [{
+                            type: 'tool_use',
+                            id: task.toolUseId,
+                            name: task.toolName,
+                            input: task.input,
+                        }]
+                    }
+                }
+            }
+        }
+        socket.emit('message', { sid: sessionId, message: JSON.stringify(assistantMessage) })
+
+        // Phase 2: Send tool_result (triggers task start in tracker)
+        const toolResultMessage = {
+            role: 'agent',
+            content: {
+                type: 'output',
+                data: {
+                    type: 'user',
+                    message: {
+                        role: 'user',
+                        content: [{
+                            type: 'tool_result',
+                            tool_use_id: task.toolUseId,
+                            content: task.resultText(taskId),
+                        }]
+                    }
+                }
+            }
+        }
+        socket.emit('message', { sid: sessionId, message: JSON.stringify(toolResultMessage) })
+    }
+
+    await new Promise(r => setTimeout(r, 500))
+    console.log(`Injected ${tasksToInject.length} background task(s): ${tasksToInject.filter(t => t.toolName === 'Agent').length} agents, ${tasksToInject.filter(t => t.toolName === 'Bash').length} shells`)
+    socket.disconnect()
+}
 
 const jwt = await getWebJwt()
 console.log('\n--- Ready ---')

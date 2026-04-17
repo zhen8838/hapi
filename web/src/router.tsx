@@ -305,10 +305,13 @@ function SessionPage() {
     } = useSkills(api, sessionId)
 
     const getAutocompleteSuggestions = useCallback(async (query: string) => {
-        if (query.startsWith('$')) {
-            return await getSkillSuggestions(query)
-        }
-        return await getSlashSuggestions(query)
+        // Slash commands and skills both use the `/` prefix (matches Claude Code).
+        // Run both lookups in parallel and merge; downstream sort is already per-source.
+        const [commandSuggestions, skillSuggestions] = await Promise.all([
+            getSlashSuggestions(query),
+            getSkillSuggestions(query),
+        ])
+        return [...commandSuggestions, ...skillSuggestions]
     }, [getSkillSuggestions, getSlashSuggestions])
 
     const refreshSelectedSession = useCallback(() => {

@@ -124,7 +124,7 @@ export function HappyComposer(props: {
         onSwitchToRemote,
         onTerminal,
         terminalUnsupported = false,
-        autocompletePrefixes = ['@', '/', '$'],
+        autocompletePrefixes = ['@', '/'],
         autocompleteSuggestions = defaultSuggestionHandler,
         voiceStatus = 'disconnected',
         voiceMicMuted = false,
@@ -262,8 +262,8 @@ export function HappyComposer(props: {
     const handleSuggestionSelect = useCallback((index: number) => {
         const suggestion = suggestions[index]
         if (!suggestion || !textareaRef.current) return
-        if (suggestion.text.startsWith('$')) {
-            markSkillUsed(suggestion.text.slice(1))
+        if (suggestion.source === 'skill') {
+            markSkillUsed(suggestion.text.replace(/^\//, ''))
         }
 
         // For Codex user prompts with content, expand the content instead of command name

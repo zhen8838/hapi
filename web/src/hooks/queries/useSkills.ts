@@ -57,7 +57,7 @@ export function useSkills(
     const getSuggestions = useCallback(async (queryText: string): Promise<Suggestion[]> => {
         const recent = getRecentSkills()
         const getRecency = (name: string) => recent[name] ?? 0
-        const searchTerm = queryText.startsWith('$')
+        const searchTerm = queryText.startsWith('/')
             ? queryText.slice(1).toLowerCase()
             : queryText.toLowerCase()
 
@@ -65,11 +65,11 @@ export function useSkills(
             return [...skills]
                 .sort((a, b) => getRecency(b.name) - getRecency(a.name) || a.name.localeCompare(b.name))
                 .map((skill) => ({
-                    key: `$${skill.name}`,
-                    text: `$${skill.name}`,
-                    label: `$${skill.name}`,
+                    key: `/skill:${skill.name}`,
+                    text: `/${skill.name}`,
+                    label: `/${skill.name}`,
                     description: skill.description,
-                    source: 'builtin'
+                    source: 'skill'
                 }))
         }
 
@@ -90,11 +90,11 @@ export function useSkills(
             .filter(item => item.score < Infinity)
             .sort((a, b) => a.score - b.score || b.recency - a.recency || a.skill.name.localeCompare(b.skill.name))
             .map(({ skill }) => ({
-                key: `$${skill.name}`,
-                text: `$${skill.name}`,
-                label: `$${skill.name}`,
+                key: `/skill:${skill.name}`,
+                text: `/${skill.name}`,
+                label: `/${skill.name}`,
                 description: skill.description,
-                source: 'builtin'
+                source: 'skill'
             }))
     }, [skills])
 

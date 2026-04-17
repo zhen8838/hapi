@@ -60,3 +60,32 @@ export function CheckIcon(props: IconProps) {
         2
     )
 }
+
+// Path data adapted from lucide.dev `git-branch` glyph.
+export function GitBranchIcon(props: IconProps) {
+    return createIcon(
+        <>
+            <line x1="6" y1="3" x2="6" y2="15" />
+            <circle cx="18" cy="6" r="3" />
+            <circle cx="6" cy="18" r="3" />
+            <path d="M18 9a9 9 0 0 1-9 9" />
+        </>,
+        props,
+        2
+    )
+}
+
+// Path data adapted from lucide.dev `folder-git-2` glyph.
+export function FolderGit2Icon(props: IconProps) {
+    return createIcon(
+        <>
+            <path d="M9 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2" />
+            <circle cx="13" cy="15" r="2" />
+            <path d="M20 8v11a2 2 0 0 1-2 2h-3" />
+            <path d="M13 17v5" />
+            <path d="M13 13V8" />
+        </>,
+        props,
+        2
+    )
+}

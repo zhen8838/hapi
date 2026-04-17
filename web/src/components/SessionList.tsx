@@ -8,7 +8,7 @@ import { useSessionActions } from '@/hooks/mutations/useSessionActions'
 import { SessionActionMenu } from '@/components/SessionActionMenu'
 import { RenameSessionDialog } from '@/components/RenameSessionDialog'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
-import { CopyIcon, CheckIcon } from '@/components/icons'
+import { CopyIcon, CheckIcon, GitBranchIcon, FolderGit2Icon } from '@/components/icons'
 import { useTranslation } from '@/lib/use-translation'
 import { useToast } from '@/lib/toast-context'
 
@@ -422,6 +422,18 @@ function SessionItem(props: {
                 {showPath ? (
                     <div className="truncate text-xs text-[var(--app-hint)]">
                         {s.metadata?.path ?? s.id}
+                    </div>
+                ) : null}
+                {s.metadata?.worktree?.branch ? (
+                    <div className="flex items-center gap-1 min-w-0 text-xs text-[var(--app-hint)]">
+                        <GitBranchIcon className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{s.metadata.worktree.branch}</span>
+                    </div>
+                ) : null}
+                {s.metadata?.worktree?.name ? (
+                    <div className="flex items-center gap-1 min-w-0 text-xs text-[var(--app-hint)]">
+                        <FolderGit2Icon className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{s.metadata.worktree.name}</span>
                     </div>
                 ) : null}
             </button>

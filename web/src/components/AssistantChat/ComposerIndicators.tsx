@@ -40,27 +40,12 @@ function LightningIcon() {
 
 function BackgroundShellIcon() {
     return (
-        <svg width="18" height="18" viewBox="0 0 400 400" fill="none" stroke="currentColor" strokeWidth={7} strokeLinecap="round" strokeLinejoin="round">
-            <defs>
-                <mask id="bg-shell-front-cutout" maskUnits="userSpaceOnUse" x="0" y="0" width="400" height="400">
-                    <rect width="400" height="400" fill="white" />
-                    <rect x="140" y="50" width="240" height="230" rx="16" fill="black" />
-                </mask>
-            </defs>
-            <g mask="url(#bg-shell-front-cutout)">
-                <g transform="translate(30, 130)">
-                    <rect width="240" height="230" rx="16" />
-                    <line x1="0" y1="50" x2="240" y2="50" />
-                    <path d="M 20 110 L 55 150 L 20 190" strokeWidth={20} />
-                    <line x1="75" y1="190" x2="135" y2="190" strokeWidth={20} />
-                </g>
-            </g>
-            <g transform="translate(140, 50)">
-                <rect width="240" height="230" rx="16" />
-                <line x1="30" y1="60" x2="150" y2="60" strokeWidth={22} strokeLinecap="round" />
-                <line x1="90" y1="115" x2="210" y2="115" strokeWidth={22} strokeLinecap="round" />
-                <line x1="30" y1="170" x2="130" y2="170" strokeWidth={22} strokeLinecap="round" />
-            </g>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+            {/* $ glyph — S-curve with a vertical line through the middle */}
+            <path d="M 16.5 6.5 C 16.5 4.5 14.5 3.5 12 3.5 C 9 3.5 7 4.8 7 7 C 7 9.5 9 10.5 12 10.5 C 15 10.5 17 11.5 17 14 C 17 16.2 15 17.5 12 17.5 C 9.5 17.5 7.5 16.5 7.5 14.5" />
+            <line x1="12" y1="1.5" x2="12" y2="19.5" />
+            {/* _ cursor */}
+            <line x1="15" y1="21" x2="21" y2="21" />
         </svg>
     )
 }

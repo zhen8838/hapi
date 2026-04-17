@@ -262,7 +262,7 @@ export function createSessionsRoutes(getSyncEngine: () => SyncEngine | null): Ho
             return engine
         }
 
-        const sessionResult = requireSessionFromParam(c, engine, { requireActive: true })
+        const sessionResult = requireSessionFromParam(c, engine)
         if (sessionResult instanceof Response) {
             return sessionResult
         }
@@ -286,7 +286,11 @@ export function createSessionsRoutes(getSyncEngine: () => SyncEngine | null): Ho
         }
 
         try {
-            await engine.applySessionConfig(sessionResult.sessionId, { permissionMode: mode })
+            if (sessionResult.session.active) {
+                await engine.applySessionConfig(sessionResult.sessionId, { permissionMode: mode })
+            } else {
+                await engine.persistSessionConfig(sessionResult.sessionId, { permissionMode: mode })
+            }
             return c.json({ ok: true })
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to apply permission mode'
@@ -300,7 +304,7 @@ export function createSessionsRoutes(getSyncEngine: () => SyncEngine | null): Ho
             return engine
         }
 
-        const sessionResult = requireSessionFromParam(c, engine, { requireActive: true })
+        const sessionResult = requireSessionFromParam(c, engine)
         if (sessionResult instanceof Response) {
             return sessionResult
         }
@@ -320,7 +324,11 @@ export function createSessionsRoutes(getSyncEngine: () => SyncEngine | null): Ho
         }
 
         try {
-            await engine.applySessionConfig(sessionResult.sessionId, { collaborationMode: parsed.data.mode })
+            if (sessionResult.session.active) {
+                await engine.applySessionConfig(sessionResult.sessionId, { collaborationMode: parsed.data.mode })
+            } else {
+                await engine.persistSessionConfig(sessionResult.sessionId, { collaborationMode: parsed.data.mode })
+            }
             return c.json({ ok: true })
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to apply collaboration mode'
@@ -334,7 +342,7 @@ export function createSessionsRoutes(getSyncEngine: () => SyncEngine | null): Ho
             return engine
         }
 
-        const sessionResult = requireSessionFromParam(c, engine, { requireActive: true })
+        const sessionResult = requireSessionFromParam(c, engine)
         if (sessionResult instanceof Response) {
             return sessionResult
         }
@@ -351,7 +359,11 @@ export function createSessionsRoutes(getSyncEngine: () => SyncEngine | null): Ho
         }
 
         try {
-            await engine.applySessionConfig(sessionResult.sessionId, { model: parsed.data.model })
+            if (sessionResult.session.active) {
+                await engine.applySessionConfig(sessionResult.sessionId, { model: parsed.data.model })
+            } else {
+                await engine.persistSessionConfig(sessionResult.sessionId, { model: parsed.data.model })
+            }
             return c.json({ ok: true })
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to apply model'
@@ -365,7 +377,7 @@ export function createSessionsRoutes(getSyncEngine: () => SyncEngine | null): Ho
             return engine
         }
 
-        const sessionResult = requireSessionFromParam(c, engine, { requireActive: true })
+        const sessionResult = requireSessionFromParam(c, engine)
         if (sessionResult instanceof Response) {
             return sessionResult
         }
@@ -385,9 +397,15 @@ export function createSessionsRoutes(getSyncEngine: () => SyncEngine | null): Ho
         }
 
         try {
-            await engine.applySessionConfig(sessionResult.sessionId, {
-                modelReasoningEffort: parsed.data.modelReasoningEffort
-            })
+            if (sessionResult.session.active) {
+                await engine.applySessionConfig(sessionResult.sessionId, {
+                    modelReasoningEffort: parsed.data.modelReasoningEffort
+                })
+            } else {
+                await engine.persistSessionConfig(sessionResult.sessionId, {
+                    modelReasoningEffort: parsed.data.modelReasoningEffort
+                })
+            }
             return c.json({ ok: true })
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to apply model reasoning effort'
@@ -401,7 +419,7 @@ export function createSessionsRoutes(getSyncEngine: () => SyncEngine | null): Ho
             return engine
         }
 
-        const sessionResult = requireSessionFromParam(c, engine, { requireActive: true })
+        const sessionResult = requireSessionFromParam(c, engine)
         if (sessionResult instanceof Response) {
             return sessionResult
         }
@@ -418,7 +436,11 @@ export function createSessionsRoutes(getSyncEngine: () => SyncEngine | null): Ho
         }
 
         try {
-            await engine.applySessionConfig(sessionResult.sessionId, { effort: parsed.data.effort })
+            if (sessionResult.session.active) {
+                await engine.applySessionConfig(sessionResult.sessionId, { effort: parsed.data.effort })
+            } else {
+                await engine.persistSessionConfig(sessionResult.sessionId, { effort: parsed.data.effort })
+            }
             return c.json({ ok: true })
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to apply effort'

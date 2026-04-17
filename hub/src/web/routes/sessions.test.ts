@@ -55,9 +55,14 @@ function createApp(session: Session) {
     const applySessionConfig = async (sessionId: string, config: Record<string, unknown>) => {
         applySessionConfigCalls.push([sessionId, config])
     }
+    const persistSessionConfigCalls: Array<[string, Record<string, unknown>]> = []
+    const persistSessionConfig = async (sessionId: string, config: Record<string, unknown>) => {
+        persistSessionConfigCalls.push([sessionId, config])
+    }
     const engine = {
         resolveSessionAccess: () => ({ ok: true, sessionId: session.id, session }),
-        applySessionConfig
+        applySessionConfig,
+        persistSessionConfig
     } as Partial<SyncEngine>
 
     const app = new Hono<WebAppEnv>()
@@ -67,7 +72,7 @@ function createApp(session: Session) {
     })
     app.route('/api', createSessionsRoutes(() => engine as SyncEngine))
 
-    return { app, applySessionConfigCalls }
+    return { app, applySessionConfigCalls, persistSessionConfigCalls }
 }
 
 describe('sessions routes', () => {
@@ -231,6 +236,191 @@ describe('sessions routes', () => {
         expect(await response.json()).toEqual({ ok: true })
         expect(applySessionConfigCalls).toEqual([
             ['session-1', { effort: 'max' }]
+        ])
+    })
+
+    it('persists permission mode for inactive Claude sessions without calling RPC', async () => {
+        const session = createSession({
+            active: false,
+            metadata: {
+                path: '/tmp/project',
+                host: 'localhost',
+                flavor: 'claude'
+            }
+        })
+        const { app, applySessionConfigCalls, persistSessionConfigCalls } = createApp(session)
+
+        const response = await app.request('/api/sessions/session-1/permission-mode', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ mode: 'default' })
+        })
+
+        expect(response.status).toBe(200)
+        expect(await response.json()).toEqual({ ok: true })
+        expect(applySessionConfigCalls).toEqual([])
+        expect(persistSessionConfigCalls).toEqual([
+            ['session-1', { permissionMode: 'default' }]
+        ])
+    })
+
+    it('persists collaboration mode for inactive remote Codex sessions without calling RPC', async () => {
+        const session = createSession({ active: false })
+        const { app, applySessionConfigCalls, persistSessionConfigCalls } = createApp(session)
+
+        const response = await app.request('/api/sessions/session-1/collaboration-mode', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ mode: 'plan' })
+        })
+
+        expect(response.status).toBe(200)
+        expect(await response.json()).toEqual({ ok: true })
+        expect(applySessionConfigCalls).toEqual([])
+        expect(persistSessionConfigCalls).toEqual([
+            ['session-1', { collaborationMode: 'plan' }]
+        ])
+    })
+
+    it('still rejects collaboration mode for inactive local Codex sessions', async () => {
+        const session = createSession({
+            active: false,
+            agentState: {
+                controlledByUser: true,
+                requests: {},
+                completedRequests: {}
+            }
+        })
+        const { app, applySessionConfigCalls, persistSessionConfigCalls } = createApp(session)
+
+        const response = await app.request('/api/sessions/session-1/collaboration-mode', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ mode: 'plan' })
+        })
+
+        expect(response.status).toBe(409)
+        expect(await response.json()).toEqual({
+            error: 'Collaboration mode can only be changed for remote Codex sessions'
+        })
+        expect(applySessionConfigCalls).toEqual([])
+        expect(persistSessionConfigCalls).toEqual([])
+    })
+
+    it('persists model for inactive Claude sessions without calling RPC', async () => {
+        const session = createSession({
+            active: false,
+            metadata: {
+                path: '/tmp/project',
+                host: 'localhost',
+                flavor: 'claude'
+            }
+        })
+        const { app, applySessionConfigCalls, persistSessionConfigCalls } = createApp(session)
+
+        const response = await app.request('/api/sessions/session-1/model', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ model: 'sonnet-4.6' })
+        })
+
+        expect(response.status).toBe(200)
+        expect(await response.json()).toEqual({ ok: true })
+        expect(applySessionConfigCalls).toEqual([])
+        expect(persistSessionConfigCalls).toEqual([
+            ['session-1', { model: 'sonnet-4.6' }]
+        ])
+    })
+
+    it('persists null model for inactive Gemini sessions', async () => {
+        const session = createSession({
+            active: false,
+            metadata: {
+                path: '/tmp/project',
+                host: 'localhost',
+                flavor: 'gemini'
+            }
+        })
+        const { app, applySessionConfigCalls, persistSessionConfigCalls } = createApp(session)
+
+        const response = await app.request('/api/sessions/session-1/model', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ model: null })
+        })
+
+        expect(response.status).toBe(200)
+        expect(applySessionConfigCalls).toEqual([])
+        expect(persistSessionConfigCalls).toEqual([
+            ['session-1', { model: null }]
+        ])
+    })
+
+    it('persists model reasoning effort for inactive remote Codex sessions without calling RPC', async () => {
+        const session = createSession({ active: false })
+        const { app, applySessionConfigCalls, persistSessionConfigCalls } = createApp(session)
+
+        const response = await app.request('/api/sessions/session-1/model-reasoning-effort', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ modelReasoningEffort: 'xhigh' })
+        })
+
+        expect(response.status).toBe(200)
+        expect(await response.json()).toEqual({ ok: true })
+        expect(applySessionConfigCalls).toEqual([])
+        expect(persistSessionConfigCalls).toEqual([
+            ['session-1', { modelReasoningEffort: 'xhigh' }]
+        ])
+    })
+
+    it('still rejects model reasoning effort for inactive local Codex sessions', async () => {
+        const session = createSession({
+            active: false,
+            agentState: {
+                controlledByUser: true,
+                requests: {},
+                completedRequests: {}
+            }
+        })
+        const { app, applySessionConfigCalls, persistSessionConfigCalls } = createApp(session)
+
+        const response = await app.request('/api/sessions/session-1/model-reasoning-effort', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ modelReasoningEffort: 'high' })
+        })
+
+        expect(response.status).toBe(409)
+        expect(await response.json()).toEqual({
+            error: 'Model reasoning effort can only be changed for remote Codex sessions'
+        })
+        expect(applySessionConfigCalls).toEqual([])
+        expect(persistSessionConfigCalls).toEqual([])
+    })
+
+    it('persists effort for inactive Claude sessions without calling RPC', async () => {
+        const session = createSession({
+            active: false,
+            metadata: {
+                path: '/tmp/project',
+                host: 'localhost',
+                flavor: 'claude'
+            }
+        })
+        const { app, applySessionConfigCalls, persistSessionConfigCalls } = createApp(session)
+
+        const response = await app.request('/api/sessions/session-1/effort', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ effort: 'high' })
+        })
+
+        expect(response.status).toBe(200)
+        expect(await response.json()).toEqual({ ok: true })
+        expect(applySessionConfigCalls).toEqual([])
+        expect(persistSessionConfigCalls).toEqual([
+            ['session-1', { effort: 'high' }]
         ])
     })
 })

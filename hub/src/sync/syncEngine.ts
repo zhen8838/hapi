@@ -335,6 +335,19 @@ export class SyncEngine {
         this.sessionCache.applySessionConfig(sessionId, applied)
     }
 
+    async persistSessionConfig(
+        sessionId: string,
+        config: {
+            permissionMode?: PermissionMode
+            model?: string | null
+            modelReasoningEffort?: string | null
+            effort?: string | null
+            collaborationMode?: CodexCollaborationMode
+        }
+    ): Promise<void> {
+        this.sessionCache.applySessionConfig(sessionId, config)
+    }
+
     async spawnSession(
         machineId: string,
         directory: string,

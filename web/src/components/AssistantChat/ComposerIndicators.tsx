@@ -40,11 +40,27 @@ function LightningIcon() {
 
 function BackgroundShellIcon() {
     return (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-            <rect x="2" y="4" width="20" height="16" rx="2" strokeDasharray="3 2" />
-            <polyline points="6 12 10 16 6 20" />
-            <line x1="12" y1="20" x2="18" y2="20" />
-            <circle cx="20" cy="4" r="3" fill="currentColor" stroke="none" />
+        <svg width="18" height="18" viewBox="0 0 400 400" fill="none" stroke="currentColor" strokeWidth={7} strokeLinecap="round" strokeLinejoin="round">
+            <defs>
+                <mask id="bg-shell-front-cutout" maskUnits="userSpaceOnUse" x="0" y="0" width="400" height="400">
+                    <rect width="400" height="400" fill="white" />
+                    <rect x="140" y="50" width="240" height="230" rx="16" fill="black" />
+                </mask>
+            </defs>
+            <g mask="url(#bg-shell-front-cutout)">
+                <g transform="translate(30, 130)">
+                    <rect width="240" height="230" rx="16" />
+                    <line x1="0" y1="50" x2="240" y2="50" />
+                    <path d="M 20 110 L 55 150 L 20 190" strokeWidth={20} />
+                    <line x1="75" y1="190" x2="135" y2="190" strokeWidth={20} />
+                </g>
+            </g>
+            <g transform="translate(140, 50)">
+                <rect width="240" height="230" rx="16" />
+                <line x1="30" y1="60" x2="150" y2="60" strokeWidth={22} strokeLinecap="round" />
+                <line x1="90" y1="115" x2="210" y2="115" strokeWidth={22} strokeLinecap="round" />
+                <line x1="30" y1="170" x2="130" y2="170" strokeWidth={22} strokeLinecap="round" />
+            </g>
         </svg>
     )
 }

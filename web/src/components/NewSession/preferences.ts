@@ -15,7 +15,7 @@ export const LEGACY_STORAGE_KEYS = [
 ] as const
 
 const VALID_AGENTS: AgentType[] = ['claude', 'codex', 'cursor', 'gemini', 'opencode']
-const VALID_CLAUDE_EFFORTS: ClaudeEffort[] = ['auto', 'medium', 'high', 'max']
+const VALID_CLAUDE_EFFORTS: ClaudeEffort[] = ['auto', 'medium', 'high', 'xhigh', 'max']
 const VALID_CODEX_REASONING_EFFORTS: CodexReasoningEffort[] = ['default', 'low', 'medium', 'high', 'xhigh']
 const VALID_SESSION_TYPES: SessionType[] = ['simple', 'worktree']
 

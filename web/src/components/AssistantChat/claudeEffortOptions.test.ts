@@ -8,6 +8,7 @@ describe('getClaudeComposerEffortOptions', () => {
             { value: 'ultra', label: 'Ultra' },
             { value: 'medium', label: 'Medium' },
             { value: 'high', label: 'High' },
+            { value: 'xhigh', label: 'XHigh' },
             { value: 'max', label: 'Max' },
         ])
     })
@@ -17,6 +18,7 @@ describe('getClaudeComposerEffortOptions', () => {
             { value: null, label: 'Auto' },
             { value: 'medium', label: 'Medium' },
             { value: 'high', label: 'High' },
+            { value: 'xhigh', label: 'XHigh' },
             { value: 'max', label: 'Max' },
         ])
     })

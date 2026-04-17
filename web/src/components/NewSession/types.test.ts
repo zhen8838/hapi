@@ -26,6 +26,7 @@ describe('Claude effort options', () => {
             { value: 'auto', label: 'Auto' },
             { value: 'medium', label: 'Medium' },
             { value: 'high', label: 'High' },
+            { value: 'xhigh', label: 'XHigh' },
             { value: 'max', label: 'Max' },
         ])
     })

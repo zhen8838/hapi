@@ -3,10 +3,11 @@ export type ClaudeComposerEffortOption = {
     label: string
 }
 
-const CLAUDE_EFFORT_PRESETS = ['medium', 'high', 'max'] as const
+const CLAUDE_EFFORT_PRESETS = ['medium', 'high', 'xhigh', 'max'] as const
 const CLAUDE_EFFORT_LABELS: Record<(typeof CLAUDE_EFFORT_PRESETS)[number], string> = {
     medium: 'Medium',
     high: 'High',
+    xhigh: 'XHigh',
     max: 'Max'
 }
 

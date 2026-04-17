@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { AttachmentMetadata } from '@/types/api'
 import { FileIcon } from '@/components/FileIcon'
 import { isImageMimeType } from '@/lib/fileAttachments'
@@ -10,12 +11,21 @@ function formatFileSize(bytes: number): string {
 
 function ImageAttachment(props: { attachment: AttachmentMetadata }) {
     const { attachment } = props
+    const [failed, setFailed] = useState(false)
+    if (failed) return <FileAttachment attachment={attachment} />
     return (
         <div className="relative overflow-hidden rounded-lg">
             <img
                 src={attachment.previewUrl}
                 alt={attachment.filename}
-                className="max-h-48 max-w-full object-contain"
+                className="h-48 w-auto max-w-full object-contain"
+                onError={() => setFailed(true)}
+                onLoad={(e) => {
+                    const img = e.currentTarget
+                    if (img.naturalWidth === 0 || img.naturalHeight === 0) {
+                        setFailed(true)
+                    }
+                }}
             />
             <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-2 py-1.5">
                 <span className="text-xs text-white/90 line-clamp-1">

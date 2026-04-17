@@ -94,11 +94,13 @@ export function createAttachmentAdapter(api: ApiClient, sessionId: string): Atta
                     return
                 }
 
-                // Generate preview URL for images under 5MB
-                let previewUrl: string | undefined
-                if (isImageMimeType(contentType) && file.size <= MAX_PREVIEW_BYTES) {
-                    previewUrl = await fileToDataUrl(file)
-                }
+                // Generate preview URL for images under 5MB. Returns undefined
+                // on any failure so the downstream `isImageMimeType(m) && m.previewUrl`
+                // filter in MessageAttachments falls through to the FileAttachment card.
+                const previewUrl: string | undefined =
+                    isImageMimeType(contentType) && file.size <= MAX_PREVIEW_BYTES
+                        ? await generatePreviewUrl(file, contentType)
+                        : undefined
 
                 yield {
                     id,
@@ -173,13 +175,31 @@ async function fileToBase64(file: File): Promise<string> {
     })
 }
 
-async function fileToDataUrl(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = () => {
-            resolve(reader.result as string)
-        }
-        reader.onerror = reject
-        reader.readAsDataURL(file)
-    })
+/**
+ * Read `file` as a `data:` URL suitable for use as an <img src=>.
+ *
+ * Hardened against three failure modes observed for SVG uploads:
+ *   1. `file.type` missing (some platforms omit it for .svg) — we rewrap the
+ *      bytes in a Blob with the caller-supplied `contentType` before reading.
+ *   2. FileReader errors — caught and returned as undefined.
+ *   3. FileReader succeeds but yields a non-string / non-"data:" result —
+ *      treated as failure and returned as undefined.
+ *
+ * Returns undefined on ANY failure. Never returns an empty string.
+ */
+async function generatePreviewUrl(file: File, contentType: string): Promise<string | undefined> {
+    const source: Blob = file.type ? file : new Blob([file], { type: contentType })
+    try {
+        const result = await new Promise<unknown>((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onload = () => resolve(reader.result)
+            reader.onerror = () => reject(reader.error ?? new Error('FileReader error'))
+            reader.readAsDataURL(source)
+        })
+        if (typeof result !== 'string' || !result.startsWith('data:')) return undefined
+        return result
+    } catch (error) {
+        console.warn('[attachmentAdapter] preview generation failed:', error)
+        return undefined
+    }
 }

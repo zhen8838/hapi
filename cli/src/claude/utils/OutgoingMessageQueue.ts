@@ -121,7 +121,7 @@ export class OutgoingMessageQueue {
             
             // Send if not already sent
             if (!item.sent) {
-                if (item.logMessage.type !== 'system' && !item.logMessage.isMeta && !item.logMessage.isCompactSummary) {
+                if (shouldSendMessage(item.logMessage)) {
                     this.sendFunction(item.logMessage);
                 }
                 item.sent = true;
@@ -188,4 +188,10 @@ export class OutgoingMessageQueue {
         }
         this.delayTimers.clear();
     }
+}
+
+function shouldSendMessage(logMessage: any): boolean {
+    if (logMessage.isMeta || logMessage.isCompactSummary) return false;
+    if (logMessage.type !== 'system') return true;
+    return logMessage.subtype === 'task_notification' || logMessage.subtype === 'task_updated';
 }

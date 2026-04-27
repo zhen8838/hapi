@@ -135,6 +135,7 @@ export class SessionCache {
             thinking: existing?.thinking ?? false,
             thinkingAt: existing?.thinkingAt ?? 0,
             backgroundTaskCount: existing?.backgroundTaskCount ?? 0,
+            backgroundTasks: existing?.backgroundTasks,
             todos,
             teamState,
             model: stored.model,
@@ -287,7 +288,9 @@ export class SessionCache {
         }
 
         for (const completion of event.completed) {
-            const idx = tasks.findIndex(t => t.id === completion.taskId || t.toolUseId === completion.taskId)
+            const idx = tasks.findIndex(t => t.id === completion.taskId
+                || t.toolUseId === completion.taskId
+                || t.toolUseId === completion.toolUseId)
             if (idx >= 0) {
                 tasks[idx] = {
                     ...tasks[idx],

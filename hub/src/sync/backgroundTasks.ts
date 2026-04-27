@@ -191,15 +191,39 @@ export class BackgroundTaskTracker {
     private extractTaskCompletions(data: Record<string, unknown>): TaskCompletion[] {
         const completions: TaskCompletion[] = []
 
+        if (data.type === 'system') {
+            if (data.subtype === 'task_notification' && data.status === 'completed' && typeof data.task_id === 'string') {
+                completions.push({
+                    taskId: data.task_id,
+                    toolUseId: typeof data.tool_use_id === 'string' ? data.tool_use_id : undefined,
+                    summary: typeof data.summary === 'string' ? data.summary : undefined,
+                    exitStatus: typeof data.status === 'string' ? data.status : undefined,
+                })
+            }
+
+            const patch = isObject(data.patch) ? data.patch : null
+            if (data.subtype === 'task_updated' && patch?.status === 'completed' && typeof data.task_id === 'string') {
+                completions.push({
+                    taskId: data.task_id,
+                    summary: typeof patch.summary === 'string' ? patch.summary : undefined,
+                    exitStatus: typeof patch.status === 'string' ? patch.status : undefined,
+                })
+            }
+
+            return completions
+        }
+
         const checkContent = (content: string) => {
             const trimmed = content.trimStart()
             if (!trimmed.startsWith('<task-notification>')) return
             const taskIdMatch = trimmed.match(/<task-id>([^<]+)<\/task-id>/)
+            const toolUseIdMatch = trimmed.match(/<tool-use-id>([^<]+)<\/tool-use-id>/)
             const summaryMatch = trimmed.match(/<summary>([^<]*)<\/summary>/)
             const statusMatch = trimmed.match(/<status>([^<]*)<\/status>/)
             if (taskIdMatch) {
                 completions.push({
                     taskId: taskIdMatch[1],
+                    toolUseId: toolUseIdMatch?.[1],
                     summary: summaryMatch?.[1],
                     exitStatus: statusMatch?.[1],
                 })
@@ -231,6 +255,7 @@ export class BackgroundTaskTracker {
 
 export type TaskCompletion = {
     taskId: string
+    toolUseId?: string
     summary?: string
     exitStatus?: string
 }
@@ -264,7 +289,9 @@ export function extractBackgroundTaskDelta(messageContent: unknown): { started: 
     if (!data) return null
 
     const started = countTaskStarts(record.content)
-    const completed = data.type === 'user' ? countTaskCompletions(data) : 0
+    const completed = data.type === 'system' ? countSystemTaskCompletions(data)
+        : data.type === 'user' ? countTaskCompletions(data)
+            : 0
 
     if (started === 0 && completed === 0) return null
     return { started, completed }
@@ -326,4 +353,9 @@ function countTaskCompletions(data: Record<string, unknown>): number {
         return 1
     }
     return 0
+}
+
+function countSystemTaskCompletions(data: Record<string, unknown>): number {
+    const patch = isObject(data.patch) ? data.patch : null
+    return data.subtype === 'task_updated' && patch?.status === 'completed' ? 1 : 0
 }

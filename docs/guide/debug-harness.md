@@ -12,7 +12,6 @@ The preview harness starts a hub and runner with one shared `HAPI_HOME`.
 - `logs/*.log` captures CLI/agent session logs.
 
 `bun run preview` enables `HAPI_LOG_LEVEL=debug` by default. `DEBUG=1` still works for older flows.
-Preview builds disable PWA/service worker generation so repeated fixed-port runs load the current bundle.
 
 ## Run the harness
 
@@ -57,6 +56,62 @@ tail -n 200 "$HAPI_HOME"/logs/*.log
 ```
 
 If `HAPI_HOME` was not set, use the `HAPI_HOME` path printed by `bun run preview`.
+
+## Replay fixtures
+
+Use `scripts/replay-jsonl.ts` when you want a repeatable frontend state without driving a live agent. It injects saved Claude Code JSONL or Hub fixture JSON into a Hub session, then opens the data through the normal Hub/Web paths.
+
+Start the preview harness first:
+
+```bash
+HAPI_HOME=/tmp/hapi-trace \
+HAPI_LISTEN_PORT=50533 \
+CLI_API_TOKEN=hapi-debug-token \
+bun run preview
+```
+
+Then replay a prepared fixture against the same port and `HAPI_HOME`:
+
+```bash
+HAPI_HOME=/tmp/hapi-trace \
+bun run scripts/replay-jsonl.ts scripts/fixtures/background-tasks-taoke-test.jsonl --port 50533
+```
+
+For background task UI testing, add synthetic agent and shell tasks:
+
+```bash
+HAPI_HOME=/tmp/hapi-trace \
+bun run scripts/replay-jsonl.ts scripts/fixtures/background-tasks-taoke-test.jsonl --port 50533 --bg-tasks 4
+```
+
+Useful prepared inputs:
+
+- `scripts/fixtures/background-tasks-taoke-test.jsonl` replays a long Claude Code session with todo items, background agents, and background shell output.
+- `scripts/fixtures/skill-inline-leak.json` replays a compact Hub fixture for skill rendering checks.
+- `scripts/replay-jsonl.ts` has built-in sample background task prompts and shell commands under `sampleTasks`.
+
+The replay script uses `settings.json` from `HAPI_HOME` to read the CLI token and writes into that same `hapi.db`. Keep the preview server running after replay so the user can inspect the generated session in the browser.
+
+## Trace-and-fix command
+
+Use `.claude/commands/trace-and-fix.md` as the companion workflow when the fix spans CLI, Hub, and Web. It is the saved Claude command for collaborative HAPI debugging.
+
+The command's core rules:
+
+1. Ask for the desired end result before choosing an implementation.
+2. Trace the full data path from the source through CLI, transport, Hub, persistence/cache, SSE/API, Web state, and final UI.
+3. Report where the data is passed through or dropped, with file and line references.
+4. Change one point at a time after the approach is confirmed.
+5. Use disposable verification scripts for real Hub runs, then delete those scripts after the feature is confirmed.
+
+The command specifically calls out common drop points:
+
+- `web/src/hooks/useSSE.ts` manual session patch allowlists.
+- `shared/src/schemas.ts` and other Zod schemas.
+- Hub route validation and access checks.
+- Type definitions along the CLI → Hub → Web path.
+
+For this debug harness, use `trace-and-fix` to decide what to inspect and change, `bun run preview` to run the real system, and `scripts/replay-jsonl.ts` when a saved transcript can reproduce the frontend state faster than a live agent.
 
 ## Remote log sink
 
@@ -135,6 +190,6 @@ Fix shape:
 
 Expected verification:
 
-- New Session UI shows an Environment Variables field for Claude Code.
+- New Session UI shows an Environment Variables field.
 - `*-runner.log` shows `environmentVariables` keys with `[redacted]` values.
-- The spawned Claude session no longer fails because local routing env is missing.
+- The spawned session no longer fails because local routing env is missing.

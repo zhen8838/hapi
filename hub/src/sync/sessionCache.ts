@@ -297,6 +297,7 @@ export class SessionCache {
                     status: 'completed',
                     completedAt: Date.now(),
                     summary: completion.summary,
+                    outputFile: completion.outputFile ?? tasks[idx].outputFile,
                 }
                 changed = true
             }
@@ -331,10 +332,14 @@ export class SessionCache {
         session.thinking = false
         session.thinkingAt = t
         session.backgroundTaskCount = 0
-        session.backgroundTasks = undefined
+        session.backgroundTasks = session.backgroundTasks?.map(task => (
+            task.status === 'running'
+                ? { ...task, status: 'completed', completedAt: t }
+                : task
+        ))
         this.taskTrackers.delete(session.id)
 
-        this.publisher.emit({ type: 'session-updated', sessionId: session.id, data: { active: false, thinking: false, backgroundTaskCount: 0, backgroundTasks: [] } })
+        this.publisher.emit({ type: 'session-updated', sessionId: session.id, data: { active: false, thinking: false, backgroundTaskCount: 0, backgroundTasks: session.backgroundTasks ?? [] } })
     }
 
     expireInactive(now: number = Date.now()): void {

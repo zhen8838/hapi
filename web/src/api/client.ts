@@ -7,6 +7,7 @@ import type {
     FileReadResponse,
     FileSearchResponse,
     GitCommandResponse,
+    GitMetadataResponse,
     MachinePathsExistsResponse,
     MachinesResponse,
     MessagesResponse,
@@ -17,6 +18,7 @@ import type {
     SlashCommandsResponse,
     SkillsResponse,
     SpawnResponse,
+    TaskOutputResponse,
     UploadFileResponse,
     VisibilityPayload,
     SessionResponse,
@@ -208,6 +210,10 @@ export class ApiClient {
         return await this.request<GitCommandResponse>(`/api/sessions/${encodeURIComponent(sessionId)}/git-status`)
     }
 
+    async getGitMetadata(sessionId: string): Promise<GitMetadataResponse> {
+        return await this.request<GitMetadataResponse>(`/api/sessions/${encodeURIComponent(sessionId)}/git-metadata`)
+    }
+
     async getGitDiffNumstat(sessionId: string, staged: boolean): Promise<GitCommandResponse> {
         const params = new URLSearchParams()
         params.set('staged', staged ? 'true' : 'false')
@@ -239,6 +245,10 @@ export class ApiClient {
         const params = new URLSearchParams()
         params.set('path', path)
         return await this.request<FileReadResponse>(`/api/sessions/${encodeURIComponent(sessionId)}/file?${params.toString()}`)
+    }
+
+    async readBackgroundTaskOutput(sessionId: string, taskId: string): Promise<TaskOutputResponse> {
+        return await this.request<TaskOutputResponse>(`/api/sessions/${encodeURIComponent(sessionId)}/background-tasks/${encodeURIComponent(taskId)}/output`)
     }
 
     async listSessionDirectory(sessionId: string, path?: string): Promise<ListDirectoryResponse> {

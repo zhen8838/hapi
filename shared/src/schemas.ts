@@ -186,6 +186,7 @@ export const SessionSchema = z.object({
         startedAt: z.number(),
         completedAt: z.number().optional(),
         summary: z.string().optional(),
+        outputFile: z.string().optional(),
     })).optional(),
     todos: TodosSchema.optional(),
     teamState: TeamStateSchema.optional(),

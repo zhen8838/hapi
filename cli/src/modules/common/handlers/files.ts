@@ -10,9 +10,20 @@ interface ReadFileRequest {
     path: string
 }
 
+interface ReadTaskOutputRequest {
+    path: string
+    flavor?: string | null
+}
+
 interface ReadFileResponse {
     success: boolean
     content?: string
+    error?: string
+}
+
+interface ReadTaskOutputResponse {
+    success: boolean
+    messages?: unknown[]
     error?: string
 }
 
@@ -28,7 +39,14 @@ interface WriteFileResponse {
     error?: string
 }
 
-export function registerFileHandlers(rpcHandlerManager: RpcHandlerManager, workingDirectory: string): void {
+export function registerFileHandlers(
+    rpcHandlerManager: RpcHandlerManager,
+    workingDirectory: string,
+    options?: {
+        defaultTaskOutputFlavor?: string | null
+        readTaskOutput?: (path: string, flavor?: string | null) => Promise<unknown[]>
+    }
+): void {
     rpcHandlerManager.registerHandler<ReadFileRequest, ReadFileResponse>('readFile', async (data) => {
         logger.debug('Read file request:', data.path)
 
@@ -45,6 +63,22 @@ export function registerFileHandlers(rpcHandlerManager: RpcHandlerManager, worki
         } catch (error) {
             logger.debug('Failed to read file:', error)
             return rpcError(getErrorMessage(error, 'Failed to read file'))
+        }
+    })
+
+    rpcHandlerManager.registerHandler<ReadTaskOutputRequest, ReadTaskOutputResponse>('readTaskOutput', async (data) => {
+        logger.debug('Read task output request:', data.path)
+
+        if (!options?.readTaskOutput) {
+            return rpcError('Task output is not supported')
+        }
+
+        try {
+            const messages = await options.readTaskOutput(data.path, data.flavor ?? options.defaultTaskOutputFlavor)
+            return { success: true, messages }
+        } catch (error) {
+            logger.debug('Failed to read task output:', error)
+            return rpcError(getErrorMessage(error, 'Failed to read task output'))
         }
     })
 

@@ -15,6 +15,7 @@ import { RpcHandlerManager } from './rpc/RpcHandlerManager'
 import { registerCommonHandlers } from '../modules/common/registerCommonHandlers'
 import type { SpawnSessionOptions, SpawnSessionResult } from '../modules/common/rpcTypes'
 import { applyVersionedAck } from './versionedUpdate'
+import { readTaskOutputMessages } from '@/agent/taskOutput'
 
 interface ServerToRunnerEvents {
     update: (data: Update) => void
@@ -78,7 +79,10 @@ export class ApiMachineClient {
             logger: (msg, data) => logger.debug(msg, data)
         })
 
-        registerCommonHandlers(this.rpcHandlerManager, getInvokedCwd())
+        registerCommonHandlers(this.rpcHandlerManager, getInvokedCwd(), {
+            allowAnyGitCwd: true,
+            readTaskOutput: readTaskOutputMessages
+        })
 
         this.rpcHandlerManager.registerHandler<PathExistsRequest, PathExistsResponse>('path-exists', async (params) => {
             const rawPaths = Array.isArray(params?.paths) ? params.paths : []

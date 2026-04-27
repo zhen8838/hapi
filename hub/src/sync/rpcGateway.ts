@@ -10,9 +10,24 @@ export type RpcCommandResponse = {
     error?: string
 }
 
+export type RpcGitMetadataResponse = {
+    success: boolean
+    branch?: string
+    worktreePath?: string
+    worktreeName?: string
+    basePath?: string
+    error?: string
+}
+
 export type RpcReadFileResponse = {
     success: boolean
     content?: string
+    error?: string
+}
+
+export type RpcTaskOutputResponse = {
+    success: boolean
+    messages?: unknown[]
     error?: string
 }
 
@@ -181,16 +196,44 @@ export class RpcGateway {
         return await this.sessionRpc(sessionId, 'git-status', { cwd }) as RpcCommandResponse
     }
 
+    async getMachineGitStatus(machineId: string, cwd?: string): Promise<RpcCommandResponse> {
+        return await this.machineRpc(machineId, 'git-status', { cwd }) as RpcCommandResponse
+    }
+
     async getGitDiffNumstat(sessionId: string, options: { cwd?: string; staged?: boolean }): Promise<RpcCommandResponse> {
         return await this.sessionRpc(sessionId, 'git-diff-numstat', options) as RpcCommandResponse
+    }
+
+    async getMachineGitDiffNumstat(machineId: string, options: { cwd?: string; staged?: boolean }): Promise<RpcCommandResponse> {
+        return await this.machineRpc(machineId, 'git-diff-numstat', options) as RpcCommandResponse
     }
 
     async getGitDiffFile(sessionId: string, options: { cwd?: string; filePath: string; staged?: boolean }): Promise<RpcCommandResponse> {
         return await this.sessionRpc(sessionId, 'git-diff-file', options) as RpcCommandResponse
     }
 
+    async getMachineGitDiffFile(machineId: string, options: { cwd?: string; filePath: string; staged?: boolean }): Promise<RpcCommandResponse> {
+        return await this.machineRpc(machineId, 'git-diff-file', options) as RpcCommandResponse
+    }
+
+    async getGitMetadata(sessionId: string, cwd?: string): Promise<RpcGitMetadataResponse> {
+        return await this.sessionRpc(sessionId, 'git-metadata', { cwd }) as RpcGitMetadataResponse
+    }
+
+    async getMachineGitMetadata(machineId: string, cwd?: string): Promise<RpcGitMetadataResponse> {
+        return await this.machineRpc(machineId, 'git-metadata', { cwd }) as RpcGitMetadataResponse
+    }
+
     async readSessionFile(sessionId: string, path: string): Promise<RpcReadFileResponse> {
         return await this.sessionRpc(sessionId, 'readFile', { path }) as RpcReadFileResponse
+    }
+
+    async readTaskOutput(sessionId: string, path: string, flavor?: string | null): Promise<RpcTaskOutputResponse> {
+        return await this.sessionRpc(sessionId, 'readTaskOutput', { path, flavor }) as RpcTaskOutputResponse
+    }
+
+    async readMachineTaskOutput(machineId: string, path: string, flavor?: string | null): Promise<RpcTaskOutputResponse> {
+        return await this.machineRpc(machineId, 'readTaskOutput', { path, flavor }) as RpcTaskOutputResponse
     }
 
     async listDirectory(sessionId: string, path: string): Promise<RpcListDirectoryResponse> {

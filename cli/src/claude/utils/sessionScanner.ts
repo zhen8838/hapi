@@ -83,7 +83,7 @@ class ClaudeSessionScanner extends BaseSessionScanner<RawJSONLines> {
             return;
         }
         const sessionFile = this.sessionFilePath(this.currentSessionId);
-        const { events, totalLines } = await readSessionLog(sessionFile, 0);
+        const { events, totalLines } = await readClaudeSessionLog(sessionFile, 0);
         logger.debug(`[SESSION_SCANNER] Marking ${events.length} existing messages as processed from session ${this.currentSessionId}`);
         const keys = events.map((entry) => messageKey(entry.event));
         this.seedProcessedKeys(keys);
@@ -113,7 +113,7 @@ class ClaudeSessionScanner extends BaseSessionScanner<RawJSONLines> {
         if (sessionId) {
             this.scannedSessions.add(sessionId);
         }
-        const { events, totalLines } = await readSessionLog(filePath, cursor);
+        const { events, totalLines } = await readClaudeSessionLog(filePath, cursor);
         return {
             events,
             nextCursor: totalLines
@@ -172,7 +172,7 @@ function messageKey(message: RawJSONLines): string {
  * Read and parse session log file.
  * Returns only valid conversation messages, silently skipping internal events.
  */
-async function readSessionLog(filePath: string, startLine: number): Promise<{ events: SessionFileScanEntry<RawJSONLines>[]; totalLines: number }> {
+export async function readClaudeSessionLog(filePath: string, startLine: number): Promise<{ events: SessionFileScanEntry<RawJSONLines>[]; totalLines: number }> {
     logger.debug(`[SESSION_SCANNER] Reading session file: ${filePath}`);
     let file: string;
     try {

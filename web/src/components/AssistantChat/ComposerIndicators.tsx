@@ -53,13 +53,16 @@ function BackgroundShellIcon() {
 type ComposerIndicatorsProps = {
     todoProgress: TodoProgress
     backgroundTaskCount: number
+    backgroundAgentCount: number
+    backgroundShellCount: number
     openPanels: Set<PanelKey>
     onTogglePanel: (panel: PanelKey) => void
 }
 
-export function ComposerIndicators({ todoProgress, backgroundTaskCount, openPanels, onTogglePanel }: ComposerIndicatorsProps) {
+export function ComposerIndicators({ todoProgress, backgroundTaskCount, backgroundAgentCount, backgroundShellCount, openPanels, onTogglePanel }: ComposerIndicatorsProps) {
     const hasTodos = todoProgress !== null && todoProgress.total > 0
-    const hasBg = backgroundTaskCount > 0
+    const hasAgents = backgroundAgentCount > 0
+    const hasShells = backgroundShellCount > 0
 
     return (
         <div className="flex items-center gap-0.5">
@@ -81,30 +84,30 @@ export function ComposerIndicators({ todoProgress, backgroundTaskCount, openPane
             <button
                 type="button"
                 onClick={() => onTogglePanel('agents')}
-                disabled={!hasBg}
+                disabled={!hasAgents}
                 className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-30 ${
                     openPanels.has('agents')
                         ? 'bg-[var(--app-bg)] text-blue-400'
-                        : hasBg
+                        : hasAgents
                             ? 'text-[var(--app-hint)] hover:bg-[var(--app-bg)] hover:text-blue-400'
                             : 'text-[var(--app-hint)]'
                 }`}
-                title={hasBg ? `Background agent(s)` : 'No background agents'}
+                title={hasAgents ? `Background agent(s)${backgroundTaskCount > 0 ? `, ${backgroundTaskCount} running` : ''}` : 'No background agents'}
             >
                 <LightningIcon />
             </button>
             <button
                 type="button"
                 onClick={() => onTogglePanel('shells')}
-                disabled={!hasBg}
+                disabled={!hasShells}
                 className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-30 ${
                     openPanels.has('shells')
                         ? 'bg-[var(--app-bg)] text-emerald-400'
-                        : hasBg
+                        : hasShells
                             ? 'text-[var(--app-hint)] hover:bg-[var(--app-bg)] hover:text-emerald-400'
                             : 'text-[var(--app-hint)]'
                 }`}
-                title={hasBg ? `Background shell(s)` : 'No background shells'}
+                title={hasShells ? `Background shell(s)${backgroundTaskCount > 0 ? `, ${backgroundTaskCount} running` : ''}` : 'No background shells'}
             >
                 <BackgroundShellIcon />
             </button>

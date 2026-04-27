@@ -45,7 +45,7 @@ function splitTaskChildren(block: ToolCallBlock): { pending: ChatBlock[]; rest: 
     return { pending, rest }
 }
 
-function HappyNestedBlockList(props: {
+export function HappyNestedBlockList(props: {
     blocks: ChatBlock[]
 }) {
     const ctx = useHappyChatContext()

@@ -9,14 +9,25 @@ import { registerSlashCommandHandlers } from './handlers/slashCommands'
 import { registerSkillsHandlers } from './handlers/skills'
 import { registerUploadHandlers } from './handlers/uploads'
 
-export function registerCommonHandlers(rpcHandlerManager: RpcHandlerManager, workingDirectory: string): void {
+export function registerCommonHandlers(
+    rpcHandlerManager: RpcHandlerManager,
+    workingDirectory: string,
+    options?: {
+        allowAnyGitCwd?: boolean
+        defaultTaskOutputFlavor?: string | null
+        readTaskOutput?: (path: string, flavor?: string | null) => Promise<unknown[]>
+    }
+): void {
     registerBashHandlers(rpcHandlerManager, workingDirectory)
-    registerFileHandlers(rpcHandlerManager, workingDirectory)
+    registerFileHandlers(rpcHandlerManager, workingDirectory, {
+        defaultTaskOutputFlavor: options?.defaultTaskOutputFlavor,
+        readTaskOutput: options?.readTaskOutput
+    })
     registerDirectoryHandlers(rpcHandlerManager, workingDirectory)
     registerRipgrepHandlers(rpcHandlerManager, workingDirectory)
     registerDifftasticHandlers(rpcHandlerManager, workingDirectory)
     registerSlashCommandHandlers(rpcHandlerManager, workingDirectory)
     registerSkillsHandlers(rpcHandlerManager, workingDirectory)
-    registerGitHandlers(rpcHandlerManager, workingDirectory)
+    registerGitHandlers(rpcHandlerManager, workingDirectory, { allowAnyCwd: options?.allowAnyGitCwd })
     registerUploadHandlers(rpcHandlerManager)
 }

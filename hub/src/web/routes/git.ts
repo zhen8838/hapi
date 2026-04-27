@@ -54,6 +54,26 @@ export function createGitRoutes(getSyncEngine: () => SyncEngine | null): Hono<We
         return c.json(result)
     })
 
+    app.get('/sessions/:id/git-metadata', async (c) => {
+        const engine = requireSyncEngine(c, getSyncEngine)
+        if (engine instanceof Response) {
+            return engine
+        }
+
+        const sessionResult = requireSessionFromParam(c, engine)
+        if (sessionResult instanceof Response) {
+            return sessionResult
+        }
+
+        const sessionPath = sessionResult.session.metadata?.path
+        if (!sessionPath) {
+            return c.json({ success: false, error: 'Session path not available' })
+        }
+
+        const result = await runRpc(() => engine.getGitMetadata(sessionResult.sessionId, sessionPath))
+        return c.json(result)
+    })
+
     app.get('/sessions/:id/git-diff-numstat', async (c) => {
         const engine = requireSyncEngine(c, getSyncEngine)
         if (engine instanceof Response) {
@@ -127,6 +147,27 @@ export function createGitRoutes(getSyncEngine: () => SyncEngine | null): Hono<We
         }
 
         const result = await runRpc(() => engine.readSessionFile(sessionResult.sessionId, parsed.data.path))
+        return c.json(result)
+    })
+
+    app.get('/sessions/:id/background-tasks/:taskId/output', async (c) => {
+        const engine = requireSyncEngine(c, getSyncEngine)
+        if (engine instanceof Response) {
+            return engine
+        }
+
+        const sessionResult = requireSessionFromParam(c, engine)
+        if (sessionResult instanceof Response) {
+            return sessionResult
+        }
+
+        const taskId = c.req.param('taskId')
+        const task = sessionResult.session.backgroundTasks?.find(t => t.id === taskId)
+        if (!task?.outputFile) {
+            return c.json({ success: false, error: 'Task output not available' })
+        }
+
+        const result = await runRpc(() => engine.readTaskOutput(sessionResult.sessionId, task.outputFile!))
         return c.json(result)
     })
 

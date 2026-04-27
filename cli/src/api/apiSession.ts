@@ -34,6 +34,7 @@ import { registerCommonHandlers } from '../modules/common/registerCommonHandlers
 import { cleanupUploadDir } from '../modules/common/handlers/uploads'
 import { TerminalManager } from '@/terminal/TerminalManager'
 import { applyVersionedAck } from './versionedUpdate'
+import { readTaskOutputMessages } from '@/agent/taskOutput'
 
 /**
  * XML tags that Claude Code injects as `type:'user'` messages.
@@ -103,7 +104,10 @@ export class ApiSessionClient extends EventEmitter {
         })
 
         if (this.metadata?.path) {
-            registerCommonHandlers(this.rpcHandlerManager, this.metadata.path)
+            registerCommonHandlers(this.rpcHandlerManager, this.metadata.path, {
+                defaultTaskOutputFlavor: this.metadata.flavor,
+                readTaskOutput: readTaskOutputMessages
+            })
         }
 
         this.socket = io(`${configuration.apiUrl}/cli`, {

@@ -30,6 +30,7 @@ import { ComposerButtons } from '@/components/AssistantChat/ComposerButtons'
 import { ComposerIndicators, type TodoProgress, type PanelKey } from '@/components/AssistantChat/ComposerIndicators'
 import { TodoDetailWindow } from '@/components/AssistantChat/TodoDetailWindow'
 import { BackgroundDetailWindow } from '@/components/AssistantChat/BackgroundDetailWindow'
+import type { HappyChatContextValue } from '@/components/AssistantChat/context'
 import { AttachmentItem } from '@/components/AssistantChat/AttachmentItem'
 import { useTranslation } from '@/lib/use-translation'
 import type { AttachmentMetadata } from '@/types/api'
@@ -78,6 +79,8 @@ export function HappyComposer(props: {
     agentState?: AgentState | null
     backgroundTaskCount?: number
     backgroundTasks?: Session['backgroundTasks']
+    readBackgroundTaskOutput?: (taskId: string) => Promise<unknown[]>
+    chatContext?: HappyChatContextValue
     contextSize?: number
     controlledByUser?: boolean
     agentFlavor?: string | null
@@ -155,6 +158,14 @@ export function HappyComposer(props: {
         const completed = props.todos.filter(t => t.status === 'completed').length
         return { items: props.todos, completed, total: props.todos.length }
     }, [props.todos])
+    const backgroundAgentTasks = useMemo(
+        () => (props.backgroundTasks ?? []).filter(t => t.type === 'agent'),
+        [props.backgroundTasks]
+    )
+    const backgroundShellTasks = useMemo(
+        () => (props.backgroundTasks ?? []).filter(t => t.type === 'shell'),
+        [props.backgroundTasks]
+    )
 
     const api = useAssistantApi()
     const composerText = useAssistantState(({ composer }) => composer.text)
@@ -967,6 +978,8 @@ export function HappyComposer(props: {
                             <ComposerIndicators
                                 todoProgress={todoProgress}
                                 backgroundTaskCount={backgroundTaskCount ?? 0}
+                                backgroundAgentCount={backgroundAgentTasks.length}
+                                backgroundShellCount={backgroundShellTasks.length}
                                 openPanels={openPanels}
                                 onTogglePanel={togglePanel}
                             />
@@ -976,16 +989,18 @@ export function HappyComposer(props: {
                     {openPanels.has('todos') && todoProgress ? (
                         <TodoDetailWindow progress={todoProgress} />
                     ) : null}
-                    {openPanels.has('agents') && (backgroundTaskCount ?? 0) > 0 ? (
+                    {openPanels.has('agents') && backgroundAgentTasks.length > 0 ? (
                         <BackgroundDetailWindow
-                            tasks={(props.backgroundTasks ?? []).filter(t => t.type === 'agent')}
+                            tasks={backgroundAgentTasks}
                             panelType="agents"
+                            readOutput={props.readBackgroundTaskOutput}
+                            chatContext={props.chatContext}
                             onKillTask={(id) => { /* TODO: wire to RPC */ console.log('kill agent', id) }}
                         />
                     ) : null}
-                    {openPanels.has('shells') && (backgroundTaskCount ?? 0) > 0 ? (
+                    {openPanels.has('shells') && backgroundShellTasks.length > 0 ? (
                         <BackgroundDetailWindow
-                            tasks={(props.backgroundTasks ?? []).filter(t => t.type === 'shell')}
+                            tasks={backgroundShellTasks}
                             panelType="shells"
                             onKillTask={(id) => { /* TODO: wire to RPC */ console.log('kill shell', id) }}
                         />

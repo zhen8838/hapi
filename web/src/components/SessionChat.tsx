@@ -10,7 +10,7 @@ import type {
     Session,
     SlashCommand
 } from '@/types/api'
-import type { ChatBlock, NormalizedMessage } from '@/chat/types'
+import type { ChatBlock, NormalizedMessage, ToolCallBlock } from '@/chat/types'
 import type { Suggestion } from '@/hooks/useActiveSuggestions'
 import { normalizeDecryptedMessage } from '@/chat/normalize'
 import { reduceChatBlocks } from '@/chat/reducer'
@@ -79,6 +79,13 @@ export function SessionChat(props: {
         agentFlavor,
         codexCollaborationModeSupported
     )
+    const readBackgroundTaskOutput = useCallback(async (taskId: string) => {
+        const result = await props.api.readBackgroundTaskOutput(props.session.id, taskId)
+        if (!result.success) {
+            throw new Error(result.error ?? 'Failed to read task output')
+        }
+        return result.messages ?? []
+    }, [props.api, props.session.id])
 
     // Voice assistant integration
     const voice = useVoiceOptional()
@@ -227,6 +234,13 @@ export function SessionChat(props: {
     const reconciled = useMemo(
         () => reconcileChatBlocks(reduced.blocks, blocksByIdRef.current),
         [reduced.blocks]
+    )
+    const backgroundTasks = useMemo(
+        () => mergeBackgroundTasks(
+            props.session.backgroundTasks,
+            extractHistoricalBackgroundTasks(reconciled.blocks)
+        ),
+        [props.session.backgroundTasks, reconciled.blocks]
     )
 
     useEffect(() => {
@@ -424,7 +438,16 @@ export function SessionChat(props: {
                         thinking={mainTurnRunning}
                         agentState={props.session.agentState}
                         backgroundTaskCount={props.session.backgroundTaskCount}
-                        backgroundTasks={props.session.backgroundTasks}
+                        backgroundTasks={backgroundTasks}
+                        readBackgroundTaskOutput={readBackgroundTaskOutput}
+                        chatContext={{
+                            api: props.api,
+                            sessionId: props.session.id,
+                            metadata: props.session.metadata,
+                            disabled: sessionInactive,
+                            onRefresh: props.onRefresh,
+                            onRetryMessage: props.onRetryMessage
+                        }}
                         contextSize={reduced.latestUsage?.contextSize}
                         controlledByUser={controlledByUser}
                         onCollaborationModeChange={
@@ -465,4 +488,63 @@ export function SessionChat(props: {
             )}
         </div>
     )
+}
+
+type BackgroundTask = NonNullable<Session['backgroundTasks']>[number]
+
+function mergeBackgroundTasks(
+    current: Session['backgroundTasks'],
+    historical: BackgroundTask[]
+): BackgroundTask[] {
+    if (!current || current.length === 0) return historical
+
+    const seen = new Set(current.flatMap(task => [task.id, task.toolUseId]))
+    return [
+        ...current,
+        ...historical.filter(task => !seen.has(task.id) && !seen.has(task.toolUseId))
+    ]
+}
+
+function extractHistoricalBackgroundTasks(blocks: ChatBlock[]): BackgroundTask[] {
+    const tasks: BackgroundTask[] = []
+
+    for (const block of blocks) {
+        if (block.kind !== 'tool-call') continue
+        collectBackgroundAgentTask(block, tasks)
+    }
+
+    return tasks
+}
+
+function collectBackgroundAgentTask(block: ToolCallBlock, tasks: BackgroundTask[]): void {
+    if (block.tool.name === 'Agent') {
+        const input = isRecord(block.tool.input) ? block.tool.input : null
+        const agentId = extractAgentId(block.tool.result)
+        if (input?.run_in_background === true || agentId) {
+            tasks.push({
+                id: agentId ?? `history:${block.id}`,
+                toolUseId: block.tool.id,
+                type: 'agent',
+                description: typeof input?.description === 'string' ? input.description : block.tool.description ?? undefined,
+                prompt: typeof input?.prompt === 'string' ? input.prompt.slice(0, 500) : undefined,
+                subagentType: typeof input?.subagent_type === 'string' ? input.subagent_type : undefined,
+                status: 'completed',
+                startedAt: block.tool.startedAt ?? block.createdAt,
+                completedAt: block.tool.completedAt ?? block.createdAt,
+            })
+        }
+    }
+
+    for (const child of block.children) {
+        if (child.kind === 'tool-call') collectBackgroundAgentTask(child, tasks)
+    }
+}
+
+function extractAgentId(result: unknown): string | null {
+    if (typeof result !== 'string') return null
+    return result.match(/agentId:\s*([^\s)]+)/)?.[1] ?? null
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return value !== null && typeof value === 'object' && !Array.isArray(value)
 }

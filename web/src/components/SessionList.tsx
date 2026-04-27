@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
+import { useQuery } from '@tanstack/react-query'
 import type { SessionSummary } from '@/types/api'
 import type { ApiClient } from '@/api/client'
 import { useLongPress } from '@/hooks/useLongPress'
@@ -11,6 +12,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { CopyIcon, CheckIcon, GitBranchIcon, FolderGit2Icon } from '@/components/icons'
 import { useTranslation } from '@/lib/use-translation'
 import { useToast } from '@/lib/toast-context'
+import { queryKeys } from '@/lib/query-keys'
 
 type SessionGroup = {
     key: string
@@ -245,6 +247,22 @@ function getTodoProgress(session: SessionSummary): { completed: number; total: n
     return session.todoProgress
 }
 
+function useSessionGitMetadata(api: ApiClient | null, session: SessionSummary) {
+    return useQuery({
+        queryKey: queryKeys.gitMetadata(session.id),
+        queryFn: async () => {
+            if (!api) {
+                throw new Error('API unavailable')
+            }
+            return await api.getGitMetadata(session.id)
+        },
+        enabled: Boolean(api && session.metadata?.path),
+        staleTime: 10_000,
+        refetchInterval: session.active ? 10_000 : false,
+        retry: false
+    })
+}
+
 /** Anthropic Claude logo (SimpleIcons) */
 function ClaudeLogo({ className }: { className?: string }) {
     return (
@@ -383,6 +401,9 @@ function SessionItem(props: {
 
     const sessionName = getSessionTitle(s)
     const todoProgress = getTodoProgress(s)
+    const gitMetadata = useSessionGitMetadata(api, s).data
+    const gitBranch = gitMetadata?.success ? gitMetadata.branch : s.metadata?.worktree?.branch
+    const worktreeName = gitMetadata?.success ? gitMetadata.worktreeName : s.metadata?.worktree?.name
     return (
         <>
             <button
@@ -424,16 +445,16 @@ function SessionItem(props: {
                         {s.metadata?.path ?? s.id}
                     </div>
                 ) : null}
-                {s.metadata?.worktree?.branch ? (
+                {gitBranch ? (
                     <div className="flex items-center gap-1 min-w-0 text-xs text-[var(--app-hint)]">
                         <GitBranchIcon className="h-3 w-3 shrink-0" />
-                        <span className="truncate">{s.metadata.worktree.branch}</span>
+                        <span className="truncate">{gitBranch}</span>
                     </div>
                 ) : null}
-                {s.metadata?.worktree?.name ? (
+                {worktreeName ? (
                     <div className="flex items-center gap-1 min-w-0 text-xs text-[var(--app-hint)]">
                         <FolderGit2Icon className="h-3 w-3 shrink-0" />
-                        <span className="truncate">{s.metadata.worktree.name}</span>
+                        <span className="truncate">{worktreeName}</span>
                     </div>
                 ) : null}
             </button>

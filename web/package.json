@@ -37,6 +37,7 @@
         "plantuml-encoder": "^1.4.0",
         "react": "^19.2.3",
         "react-dom": "^19.2.3",
+        "react-markdown": "^10.1.0",
         "rehype-katex": "^7.0.1",
         "rehype-raw": "^7.0.0",
         "remark-gfm": "^4.0.1",

@@ -17,21 +17,31 @@ function copyWithExecCommand(text: string): boolean {
     textarea.style.pointerEvents = 'none'
 
     const activeElement = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const root = activeElement?.closest<HTMLElement>('[role="dialog"]') ?? document.body
     const selection = document.getSelection()
     const previousRange = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null
 
-    document.body.appendChild(textarea)
+    root.appendChild(textarea)
     textarea.focus()
     textarea.select()
     textarea.setSelectionRange(0, textarea.value.length)
 
+    let handledCopyEvent = false
+    const onCopy = (event: ClipboardEvent) => {
+        event.clipboardData?.setData('text/plain', text)
+        event.preventDefault()
+        handledCopyEvent = true
+    }
+
     let copied = false
     try {
-        copied = document.execCommand('copy')
+        document.addEventListener('copy', onCopy, true)
+        copied = document.execCommand('copy') || handledCopyEvent
     } catch {
         copied = false
     } finally {
-        document.body.removeChild(textarea)
+        document.removeEventListener('copy', onCopy, true)
+        root.removeChild(textarea)
         if (selection) {
             selection.removeAllRanges()
             if (previousRange) {
@@ -44,7 +54,18 @@ function copyWithExecCommand(text: string): boolean {
     return copied
 }
 
+function shouldPreferExecCommand(): boolean {
+    if (typeof document === 'undefined') return false
+    const activeElement = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    return Boolean(activeElement?.closest('[role="dialog"]'))
+}
+
 export async function safeCopyToClipboard(text: string): Promise<void> {
+    const preferExecCommand = shouldPreferExecCommand()
+    if (preferExecCommand && copyWithExecCommand(text)) {
+        return
+    }
+
     if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
         try {
             await navigator.clipboard.writeText(text)
@@ -54,7 +75,7 @@ export async function safeCopyToClipboard(text: string): Promise<void> {
         }
     }
 
-    if (copyWithExecCommand(text)) {
+    if (!preferExecCommand && copyWithExecCommand(text)) {
         return
     }
 

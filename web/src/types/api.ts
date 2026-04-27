@@ -108,6 +108,15 @@ export type GitCommandResponse = {
     error?: string
 }
 
+export type GitMetadataResponse = {
+    success: boolean
+    branch?: string
+    worktreePath?: string
+    worktreeName?: string
+    basePath?: string
+    error?: string
+}
+
 export type FileSearchItem = {
     fileName: string
     filePath: string
@@ -137,6 +146,12 @@ export type ListDirectoryResponse = {
 export type FileReadResponse = {
     success: boolean
     content?: string
+    error?: string
+}
+
+export type TaskOutputResponse = {
+    success: boolean
+    messages?: unknown[]
     error?: string
 }
 

@@ -19,9 +19,11 @@ import {
     RpcGateway,
     type RpcCommandResponse,
     type RpcDeleteUploadResponse,
+    type RpcGitMetadataResponse,
     type RpcListDirectoryResponse,
     type RpcPathExistsResponse,
     type RpcReadFileResponse,
+    type RpcTaskOutputResponse,
     type RpcUploadFileResponse
 } from './rpcGateway'
 import { SessionCache } from './sessionCache'
@@ -32,9 +34,11 @@ export type { SyncEventListener } from './eventPublisher'
 export type {
     RpcCommandResponse,
     RpcDeleteUploadResponse,
+    RpcGitMetadataResponse,
     RpcListDirectoryResponse,
     RpcPathExistsResponse,
     RpcReadFileResponse,
+    RpcTaskOutputResponse,
     RpcUploadFileResponse
 } from './rpcGateway'
 
@@ -571,19 +575,64 @@ export class SyncEngine {
     }
 
     async getGitStatus(sessionId: string, cwd?: string): Promise<RpcCommandResponse> {
-        return await this.rpcGateway.getGitStatus(sessionId, cwd)
+        return await this.gitRpcWithFallback(
+            sessionId,
+            () => this.rpcGateway.getGitStatus(sessionId, cwd),
+            (machineId) => this.rpcGateway.getMachineGitStatus(machineId, cwd)
+        )
     }
 
     async getGitDiffNumstat(sessionId: string, options: { cwd?: string; staged?: boolean }): Promise<RpcCommandResponse> {
-        return await this.rpcGateway.getGitDiffNumstat(sessionId, options)
+        return await this.gitRpcWithFallback(
+            sessionId,
+            () => this.rpcGateway.getGitDiffNumstat(sessionId, options),
+            (machineId) => this.rpcGateway.getMachineGitDiffNumstat(machineId, options)
+        )
     }
 
     async getGitDiffFile(sessionId: string, options: { cwd?: string; filePath: string; staged?: boolean }): Promise<RpcCommandResponse> {
-        return await this.rpcGateway.getGitDiffFile(sessionId, options)
+        return await this.gitRpcWithFallback(
+            sessionId,
+            () => this.rpcGateway.getGitDiffFile(sessionId, options),
+            (machineId) => this.rpcGateway.getMachineGitDiffFile(machineId, options)
+        )
+    }
+
+    async getGitMetadata(sessionId: string, cwd?: string): Promise<RpcGitMetadataResponse> {
+        return await this.gitRpcWithFallback(
+            sessionId,
+            () => this.rpcGateway.getGitMetadata(sessionId, cwd),
+            (machineId) => this.rpcGateway.getMachineGitMetadata(machineId, cwd)
+        )
     }
 
     async readSessionFile(sessionId: string, path: string): Promise<RpcReadFileResponse> {
         return await this.rpcGateway.readSessionFile(sessionId, path)
+    }
+
+    async readTaskOutput(sessionId: string, path: string): Promise<RpcTaskOutputResponse> {
+        const session = this.getSession(sessionId)
+        const flavor = session?.metadata?.flavor ?? 'claude'
+        let sessionError: unknown = null
+
+        if (session?.active) {
+            try {
+                return await this.rpcGateway.readTaskOutput(sessionId, path, flavor)
+            } catch (error) {
+                sessionError = error
+            }
+        }
+
+        const machineId = session?.metadata?.machineId
+        const machine = machineId ? this.getMachine(machineId) : undefined
+        if (machineId && machine?.active) {
+            return await this.rpcGateway.readMachineTaskOutput(machineId, path, flavor)
+        }
+
+        return {
+            success: false,
+            error: sessionError instanceof Error ? sessionError.message : 'Task output unavailable'
+        }
     }
 
     async listDirectory(sessionId: string, path: string): Promise<RpcListDirectoryResponse> {
@@ -600,6 +649,41 @@ export class SyncEngine {
 
     async runRipgrep(sessionId: string, args: string[], cwd?: string): Promise<RpcCommandResponse> {
         return await this.rpcGateway.runRipgrep(sessionId, args, cwd)
+    }
+
+    private async gitRpcWithFallback<T extends { success: boolean; error?: string }>(
+        sessionId: string,
+        sessionCall: () => Promise<T>,
+        machineCall: (machineId: string) => Promise<T>
+    ): Promise<T> {
+        const session = this.getSession(sessionId)
+        let sessionError: unknown = null
+
+        if (session?.active) {
+            try {
+                return await sessionCall()
+            } catch (error) {
+                sessionError = error
+            }
+        }
+
+        const machineId = session?.metadata?.machineId
+        const machine = machineId ? this.getMachine(machineId) : undefined
+        if (machineId && machine?.active) {
+            try {
+                return await machineCall(machineId)
+            } catch (error) {
+                return {
+                    success: false,
+                    error: error instanceof Error ? error.message : String(error)
+                } as T
+            }
+        }
+
+        return {
+            success: false,
+            error: sessionError instanceof Error ? sessionError.message : 'Git status unavailable'
+        } as T
     }
 
     async listSlashCommands(sessionId: string, agent: string): Promise<{

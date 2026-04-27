@@ -14,6 +14,7 @@ type SpawnInput = {
     sessionType?: 'simple' | 'worktree'
     worktreeName?: string
     additionalParameters?: string[]
+    environmentVariables?: Record<string, string>
 }
 
 export function useSpawnSession(api: ApiClient | null): {
@@ -38,7 +39,8 @@ export function useSpawnSession(api: ApiClient | null): {
                 input.sessionType,
                 input.worktreeName,
                 input.effort,
-                input.additionalParameters
+                input.additionalParameters,
+                input.environmentVariables
             )
         },
         onSuccess: () => {

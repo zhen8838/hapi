@@ -129,6 +129,8 @@ export default {
   'newSession.additionalParameters.remove': 'Remove',
   'newSession.additionalParameters.empty': 'No additional parameters.',
   'newSession.additionalParameters.claudeOnly': 'Additional parameters are currently only applied to Claude Code sessions.',
+  'newSession.environmentVariables': 'Environment Variables',
+  'newSession.environmentVariables.help': 'Enter one KEY=value pair per line.',
   'newSession.create': 'Create',
   'newSession.creating': 'Creating…',
 

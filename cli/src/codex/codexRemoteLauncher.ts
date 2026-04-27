@@ -37,7 +37,7 @@ class CodexRemoteLauncher extends RemoteLauncherBase {
     private currentTurnId: string | null = null;
 
     constructor(session: CodexSession) {
-        super(process.env.DEBUG ? session.logPath : undefined);
+        super(logger.isDebugEnabled() ? session.logPath : undefined);
         this.session = session;
         this.appServerClient = new CodexAppServerClient();
     }
@@ -543,7 +543,7 @@ class CodexRemoteLauncher extends RemoteLauncherBase {
         });
 
         function logActiveHandles(tag: string) {
-            if (!process.env.DEBUG) return;
+            if (!logger.isDebugEnabled()) return;
             const anyProc: any = process as any;
             const handles = typeof anyProc._getActiveHandles === 'function' ? anyProc._getActiveHandles() : [];
             const requests = typeof anyProc._getActiveRequests === 'function' ? anyProc._getActiveRequests() : [];

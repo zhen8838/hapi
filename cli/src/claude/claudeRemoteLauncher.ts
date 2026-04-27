@@ -33,7 +33,7 @@ class ClaudeRemoteLauncher extends RemoteLauncherBase {
     private handleSessionFound: ((sessionId: string) => void) | null = null;
 
     constructor(session: Session) {
-        super(process.env.DEBUG ? session.logPath : undefined);
+        super(logger.isDebugEnabled() ? session.logPath : undefined);
         this.session = session;
     }
 

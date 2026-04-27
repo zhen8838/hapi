@@ -21,7 +21,7 @@ class OpencodeRemoteLauncher extends RemoteLauncherBase {
     private instructionsSent = false;
 
     constructor(session: OpencodeSession) {
-        super(process.env.DEBUG ? session.logPath : undefined);
+        super(logger.isDebugEnabled() ? session.logPath : undefined);
         this.session = session;
     }
 

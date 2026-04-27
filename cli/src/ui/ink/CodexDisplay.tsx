@@ -129,7 +129,7 @@ export const CodexDisplay: React.FC<CodexDisplayProps> = ({ messageBuffer, logPa
                             </Text>
                         </>
                     )}
-                    {process.env.DEBUG && logPath && (
+                    {logPath && (
                         <Text color="gray" dimColor>
                             Debug logs: {logPath}
                         </Text>

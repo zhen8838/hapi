@@ -53,7 +53,7 @@ class CursorRemoteLauncher extends RemoteLauncherBase {
     private displayPermissionMode: string | null = null;
 
     constructor(session: CursorSession) {
-        super(process.env.DEBUG ? session.logPath : undefined);
+        super(logger.isDebugEnabled() ? session.logPath : undefined);
         this.session = session;
     }
 

@@ -28,6 +28,7 @@ export type SessionProfileConfig = {
     sessionType: SessionType
     worktreeName: string
     additionalParameters: string[]
+    environmentVariables: Record<string, string>
     permissionMode: PermissionMode
     collaborationMode: CodexCollaborationMode
 }
@@ -68,6 +69,11 @@ function normalizeSessionProfileConfig(value: unknown): SessionProfileConfig | n
     const additionalParameters = Array.isArray(config.additionalParameters)
         ? config.additionalParameters.filter((item): item is string => typeof item === 'string')
         : []
+    const environmentVariables = config.environmentVariables && typeof config.environmentVariables === 'object' && !Array.isArray(config.environmentVariables)
+        ? Object.fromEntries(Object.entries(config.environmentVariables).filter((entry): entry is [string, string] => (
+            typeof entry[0] === 'string' && typeof entry[1] === 'string'
+        )))
+        : {}
     const permissionMode = typeof config.permissionMode === 'string' ? config.permissionMode as PermissionMode : 'default'
     const collaborationMode = typeof config.collaborationMode === 'string' ? config.collaborationMode as CodexCollaborationMode : 'default'
 
@@ -80,6 +86,7 @@ function normalizeSessionProfileConfig(value: unknown): SessionProfileConfig | n
         sessionType,
         worktreeName,
         additionalParameters,
+        environmentVariables,
         permissionMode,
         collaborationMode,
     }

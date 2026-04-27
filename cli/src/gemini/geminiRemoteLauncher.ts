@@ -23,7 +23,7 @@ class GeminiRemoteLauncher extends RemoteLauncherBase {
     private displayPermissionMode: PermissionMode | null = null;
 
     constructor(session: GeminiSession, opts: { model?: string; hookSettingsPath?: string }) {
-        super(process.env.DEBUG ? session.logPath : undefined);
+        super(logger.isDebugEnabled() ? session.logPath : undefined);
         this.session = session;
         this.model = opts.model;
         this.hookSettingsPath = opts.hookSettingsPath;

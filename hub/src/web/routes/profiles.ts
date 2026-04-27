@@ -21,6 +21,7 @@ const profileConfigSchema = z.object({
     sessionType: z.enum(['simple', 'worktree']).default('simple'),
     worktreeName: z.string().default(''),
     additionalParameters: z.array(z.string()).default([]),
+    environmentVariables: z.record(z.string(), z.string()).default({}),
     permissionMode: z.string().default('default'),
     collaborationMode: z.string().default('default'),
 })

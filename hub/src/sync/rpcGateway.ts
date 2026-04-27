@@ -117,13 +117,14 @@ export class RpcGateway {
         worktreeName?: string,
         resumeSessionId?: string,
         effort?: string,
-        additionalParameters?: string[]
+        additionalParameters?: string[],
+        environmentVariables?: Record<string, string>
     ): Promise<{ type: 'success'; sessionId: string } | { type: 'error'; message: string }> {
         try {
             const result = await this.machineRpc(
                 machineId,
                 'spawn-happy-session',
-                { type: 'spawn-in-directory', directory, agent, model, modelReasoningEffort, yolo, sessionType, worktreeName, resumeSessionId, effort, additionalParameters }
+                { type: 'spawn-in-directory', directory, agent, model, modelReasoningEffort, yolo, sessionType, worktreeName, resumeSessionId, effort, additionalParameters, environmentVariables }
             )
             if (result && typeof result === 'object') {
                 const obj = result as Record<string, unknown>

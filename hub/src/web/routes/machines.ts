@@ -13,7 +13,11 @@ const spawnBodySchema = z.object({
     yolo: z.boolean().optional(),
     sessionType: z.enum(['simple', 'worktree']).optional(),
     worktreeName: z.string().optional(),
-    additionalParameters: z.array(z.string().min(1)).max(100).optional()
+    additionalParameters: z.array(z.string().min(1)).max(100).optional(),
+    environmentVariables: z.record(
+        z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/),
+        z.string()
+    ).optional()
 })
 
 const pathsExistsSchema = z.object({
@@ -63,7 +67,8 @@ export function createMachinesRoutes(getSyncEngine: () => SyncEngine | null): Ho
             parsed.data.worktreeName,
             undefined,
             parsed.data.effort,
-            parsed.data.additionalParameters
+            parsed.data.additionalParameters,
+            parsed.data.environmentVariables
         )
         return c.json(result)
     })

@@ -409,11 +409,12 @@ export class ApiClient {
         sessionType?: 'simple' | 'worktree',
         worktreeName?: string,
         effort?: string,
-        additionalParameters?: string[]
+        additionalParameters?: string[],
+        environmentVariables?: Record<string, string>
     ): Promise<SpawnResponse> {
         return await this.request<SpawnResponse>(`/api/machines/${encodeURIComponent(machineId)}/spawn`, {
             method: 'POST',
-            body: JSON.stringify({ directory, agent, model, modelReasoningEffort, yolo, sessionType, worktreeName, effort, additionalParameters })
+            body: JSON.stringify({ directory, agent, model, modelReasoningEffort, yolo, sessionType, worktreeName, effort, additionalParameters, environmentVariables })
         })
     }
 

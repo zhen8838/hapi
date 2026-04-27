@@ -25,7 +25,8 @@
         "test:web": "cd web && bun run test",
         "clean-session": "bun run hub/scripts/cleanup-sessions.ts",
         "release-all": "cd cli && bun run release-all",
-        "preview": "bun run build:web && bun run scripts/preview.ts"
+        "preview": "bun run build:web && bun run scripts/preview.ts",
+        "preview:debug": "HAPI_LOG_LEVEL=debug bun run preview"
     },
     "devDependencies": {
         "concurrently": "^9.2.1",

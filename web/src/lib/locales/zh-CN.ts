@@ -125,6 +125,8 @@ export default {
   'newSession.additionalParameters.remove': '删除',
   'newSession.additionalParameters.empty': '暂无附加参数。',
   'newSession.additionalParameters.claudeOnly': '附加参数当前仅会应用到 Claude Code 会话。',
+  'newSession.environmentVariables': '环境变量',
+  'newSession.environmentVariables.help': '每行填写一个 KEY=value。',
   'newSession.create': '创建',
   'newSession.creating': '创建中…',
 

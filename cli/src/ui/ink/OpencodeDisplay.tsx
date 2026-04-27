@@ -176,7 +176,7 @@ export const OpencodeDisplay: React.FC<OpencodeDisplayProps> = ({
                                 .join(' | ')}
                         </Text>
                     )}
-                    {process.env.DEBUG && logPath && (
+                    {logPath && (
                         <Text color="gray" dimColor>
                             Debug logs: {logPath}
                         </Text>

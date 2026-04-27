@@ -192,7 +192,13 @@ export async function startRunner(): Promise<void> {
 
     // Spawn a new session (sessionId reserved for future --resume functionality)
     const spawnSession = async (options: SpawnSessionOptions): Promise<SpawnSessionResult> => {
-      logger.debugLargeJson('[RUNNER RUN] Spawning session', options);
+      logger.debugLargeJson('[RUNNER RUN] Spawning session', {
+        ...options,
+        token: options.token ? '[redacted]' : undefined,
+        environmentVariables: options.environmentVariables
+          ? Object.fromEntries(Object.keys(options.environmentVariables).map((key) => [key, '[redacted]']))
+          : undefined
+      });
 
       const { directory, sessionId, machineId, approvedNewDirectoryCreation = true } = options;
       const agent = options.agent ?? 'claude';
@@ -326,6 +332,13 @@ export async function startRunner(): Promise<void> {
               CLAUDE_CODE_OAUTH_TOKEN: options.token
             };
           }
+        }
+
+        if (options.environmentVariables) {
+          extraEnv = {
+            ...extraEnv,
+            ...options.environmentVariables
+          };
         }
 
         if (worktreeInfo) {

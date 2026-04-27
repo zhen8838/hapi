@@ -175,7 +175,7 @@ export const GeminiDisplay: React.FC<GeminiDisplayProps> = ({
                             {permissionMode ? ` | Permission: ${permissionMode}` : ''}
                         </Text>
                     )}
-                    {process.env.DEBUG && logPath && (
+                    {logPath && (
                         <Text color="gray" dimColor>
                             Debug logs: {logPath}
                         </Text>

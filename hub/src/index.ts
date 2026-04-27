@@ -27,6 +27,7 @@ import { waitForTunnelTlsReady } from './tunnel/tlsGate'
 import QRCode from 'qrcode'
 import type { Server as BunServer } from 'bun'
 import type { WebSocketData } from '@socket.io/bun-engine'
+import { logger } from './logger'
 
 /** Format config source for logging */
 function formatSource(source: ConfigSource | 'generated'): string {
@@ -106,7 +107,8 @@ let notificationHub: NotificationHub | null = null
 let tunnelManager: TunnelManager | null = null
 
 async function main() {
-    console.log('HAPI Hub starting...')
+    logger.info('HAPI Hub starting...')
+    logger.info(`[Hub] Logs: ${logger.logFilePath}`)
 
     // Load configuration (async - loads from env/file with persistence)
     const relayApiDomain = process.env.HAPI_RELAY_API || 'relay.hapi.run'
@@ -121,40 +123,40 @@ async function main() {
 
     // Display CLI API token information
     if (config.cliApiTokenIsNew) {
-        console.log('')
-        console.log('='.repeat(70))
-        console.log('  NEW CLI_API_TOKEN GENERATED')
-        console.log('='.repeat(70))
-        console.log('')
-        console.log(`  Token: ${config.cliApiToken}`)
-        console.log('')
-        console.log(`  Saved to: ${config.settingsFile}`)
-        console.log('')
-        console.log('='.repeat(70))
-        console.log('')
+        logger.info('')
+        logger.info('='.repeat(70))
+        logger.info('  NEW CLI_API_TOKEN GENERATED')
+        logger.info('='.repeat(70))
+        logger.info('')
+        logger.info(`  Token: ${config.cliApiToken}`)
+        logger.info('')
+        logger.info(`  Saved to: ${config.settingsFile}`)
+        logger.info('')
+        logger.info('='.repeat(70))
+        logger.info('')
     } else {
-        console.log(`[Hub] CLI_API_TOKEN: loaded from ${formatSource(config.sources.cliApiToken)}`)
+        logger.info(`[Hub] CLI_API_TOKEN: loaded from ${formatSource(config.sources.cliApiToken)}`)
     }
 
     // Display other configuration sources
-    console.log(`[Hub] HAPI_LISTEN_HOST: ${config.listenHost} (${formatSource(config.sources.listenHost)})`)
-    console.log(`[Hub] HAPI_LISTEN_PORT: ${config.listenPort} (${formatSource(config.sources.listenPort)})`)
-    console.log(`[Hub] HAPI_PUBLIC_URL: ${config.publicUrl} (${formatSource(config.sources.publicUrl)})`)
+    logger.info(`[Hub] HAPI_LISTEN_HOST: ${config.listenHost} (${formatSource(config.sources.listenHost)})`)
+    logger.info(`[Hub] HAPI_LISTEN_PORT: ${config.listenPort} (${formatSource(config.sources.listenPort)})`)
+    logger.info(`[Hub] HAPI_PUBLIC_URL: ${config.publicUrl} (${formatSource(config.sources.publicUrl)})`)
 
     if (!config.telegramEnabled) {
-        console.log('[Hub] Telegram: disabled (no TELEGRAM_BOT_TOKEN)')
+        logger.info('[Hub] Telegram: disabled (no TELEGRAM_BOT_TOKEN)')
     } else {
         const tokenSource = formatSource(config.sources.telegramBotToken)
-        console.log(`[Hub] Telegram: enabled (${tokenSource})`)
+        logger.info(`[Hub] Telegram: enabled (${tokenSource})`)
         const notificationSource = formatSource(config.sources.telegramNotification)
-        console.log(`[Hub] Telegram notifications: ${config.telegramNotification ? 'enabled' : 'disabled'} (${notificationSource})`)
+        logger.info(`[Hub] Telegram notifications: ${config.telegramNotification ? 'enabled' : 'disabled'} (${notificationSource})`)
     }
 
     // Display tunnel status
     if (relayFlag.enabled) {
-        console.log(`[Hub] Tunnel: enabled (${relayFlag.source}), API: ${relayApiDomain}`)
+        logger.info(`[Hub] Tunnel: enabled (${relayFlag.source}), API: ${relayApiDomain}`)
     } else {
-        console.log(`[Hub] Tunnel: disabled (${relayFlag.source})`)
+        logger.info(`[Hub] Tunnel: disabled (${relayFlag.source})`)
     }
 
     const store = new Store(config.dbPath)
@@ -225,9 +227,9 @@ async function main() {
         await happyBot.start()
     }
 
-    console.log('')
-    console.log('[Web] Hub listening on :' + config.listenPort)
-    console.log('[Web] Local:  http://localhost:' + config.listenPort)
+    logger.info('')
+    logger.info('[Web] Hub listening on :' + config.listenPort)
+    logger.info('[Web] Local:  http://localhost:' + config.listenPort)
 
     // Initialize tunnel AFTER web service is ready
     let tunnelUrl: string | null = null
@@ -243,8 +245,8 @@ async function main() {
         try {
             tunnelUrl = await tunnelManager.start()
         } catch (error) {
-            console.error('[Tunnel] Failed to start:', error instanceof Error ? error.message : error)
-            console.log('[Tunnel] Hub continuing without tunnel. Restart without --relay to disable.')
+            logger.error('[Tunnel] Failed to start:', error instanceof Error ? error.message : error)
+            logger.info('[Tunnel] Hub continuing without tunnel. Restart without --relay to disable.')
         }
     }
 
@@ -253,11 +255,11 @@ async function main() {
         const announceTunnelAccess = async () => {
             const tlsReady = await waitForTunnelTlsReady(tunnelUrl, manager)
             if (!tlsReady) {
-                console.log('[Tunnel] Tunnel stopped before TLS was ready.')
+                logger.info('[Tunnel] Tunnel stopped before TLS was ready.')
                 return
             }
 
-            console.log('[Web] Public: ' + tunnelUrl)
+            logger.info('[Web] Public: ' + tunnelUrl)
 
             // Generate direct access link with hub and token
             const params = new URLSearchParams({
@@ -266,11 +268,11 @@ async function main() {
             })
             const directAccessUrl = `${officialWebUrl}/?${params.toString()}`
 
-            console.log('')
-            console.log('Open in browser:')
-            console.log(`  ${directAccessUrl}`)
-            console.log('')
-            console.log('or scan the QR code to open:')
+            logger.info('')
+            logger.info('Open in browser:')
+            logger.info(`  ${directAccessUrl}`)
+            logger.info('')
+            logger.info('or scan the QR code to open:')
 
             // Display QR code for easy mobile access
             try {
@@ -280,8 +282,8 @@ async function main() {
                     margin: 1,
                     errorCorrectionLevel: 'L'
                 })
-                console.log('')
-                console.log(qrString)
+                logger.info('')
+                logger.info(qrString)
             } catch {
                 // QR code generation failure should not affect main flow
             }
@@ -289,12 +291,12 @@ async function main() {
 
         void announceTunnelAccess()
     }
-    console.log('')
-    console.log('HAPI Hub is ready!')
+    logger.info('')
+    logger.info('HAPI Hub is ready!')
 
     // Handle shutdown
     const shutdown = async () => {
-        console.log('\nShutting down...')
+        logger.info('\nShutting down...')
         await tunnelManager?.stop()
         await happyBot?.stop()
         notificationHub?.stop()
@@ -312,6 +314,6 @@ async function main() {
 }
 
 main().catch((error) => {
-    console.error('Fatal error:', error)
+    logger.error('Fatal error:', error)
     process.exit(1)
 })

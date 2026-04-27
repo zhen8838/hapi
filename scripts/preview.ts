@@ -42,6 +42,7 @@ const sharedEnv = {
     HAPI_HOME: previewHome,
     HAPI_LISTEN_PORT: String(port),
     HAPI_LISTEN_HOST: '0.0.0.0',
+    HAPI_LOG_LEVEL: process.env.HAPI_LOG_LEVEL ?? 'debug',
     DEBUG: 'hapi:*',
 }
 
@@ -51,6 +52,7 @@ console.log(`  ─────────────────────�
 console.log(`  URL:       http://127.0.0.1:${port}`)
 console.log(`  HAPI_HOME: ${previewHome}`)
 console.log(`  Log:       ${logFile}`)
+console.log(`  HAPI logs: ${join(previewHome, 'logs')}`)
 console.log(`  Press Ctrl+C to stop`)
 console.log(``)
 

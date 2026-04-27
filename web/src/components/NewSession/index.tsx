@@ -16,6 +16,7 @@ import { ActionButtons } from './ActionButtons'
 import { AdditionalParametersSection } from './AdditionalParametersSection'
 import { AgentSelector } from './AgentSelector'
 import { DirectorySection } from './DirectorySection'
+import { EnvironmentVariablesSection } from './EnvironmentVariablesSection'
 import { MachineSelector } from './MachineSelector'
 import { ModelSelector } from './ModelSelector'
 import { ProfileSection } from './ProfileSection'
@@ -59,6 +60,7 @@ export function NewSession(props: {
     const [sessionType, setSessionType] = useState<SessionType>('simple')
     const [worktreeName, setWorktreeName] = useState('')
     const [additionalParameters, setAdditionalParameters] = useState<string[]>([])
+    const [environmentVariablesText, setEnvironmentVariablesText] = useState('')
     const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null)
     const [profileName, setProfileName] = useState('')
     const [directoryCreationConfirmed, setDirectoryCreationConfirmed] = useState(false)
@@ -108,9 +110,10 @@ export function NewSession(props: {
         sessionType,
         worktreeName,
         additionalParameters: [...additionalParameters],
+        environmentVariables: parseEnvironmentVariables(environmentVariablesText),
         permissionMode: 'default',
         collaborationMode: 'default',
-    }), [additionalParameters, agent, effort, model, modelReasoningEffort, sessionType, worktreeName, yoloMode])
+    }), [additionalParameters, agent, effort, environmentVariablesText, model, modelReasoningEffort, sessionType, worktreeName, yoloMode])
 
     const applyProfile = useCallback((profile: SessionProfile | null) => {
         if (!profile) {
@@ -125,6 +128,7 @@ export function NewSession(props: {
         setSessionType(profile.config.sessionType)
         setWorktreeName(profile.config.worktreeName)
         setAdditionalParameters([...profile.config.additionalParameters])
+        setEnvironmentVariablesText(formatEnvironmentVariables(profile.config.environmentVariables))
         setProfileName(profile.name)
     }, [])
 
@@ -402,6 +406,10 @@ export function NewSession(props: {
             const resolvedAdditionalParameters = agent === 'claude'
                 ? additionalParameters.map((parameter) => parameter.trim()).filter(Boolean)
                 : undefined
+            const parsedEnvironmentVariables = parseEnvironmentVariables(environmentVariablesText)
+            const resolvedEnvironmentVariables = Object.keys(parsedEnvironmentVariables).length > 0
+                ? parsedEnvironmentVariables
+                : undefined
             const result = await spawnSession({
                 machineId,
                 directory: trimmedDirectory,
@@ -412,7 +420,8 @@ export function NewSession(props: {
                 yolo: yoloMode,
                 sessionType,
                 worktreeName: sessionType === 'worktree' ? (worktreeName.trim() || undefined) : undefined,
-                additionalParameters: resolvedAdditionalParameters
+                additionalParameters: resolvedAdditionalParameters,
+                environmentVariables: resolvedEnvironmentVariables
             })
 
             if (result.type === 'success') {
@@ -515,6 +524,11 @@ export function NewSession(props: {
                 isDisabled={isFormDisabled}
                 onChange={setAdditionalParameters}
             />
+            <EnvironmentVariablesSection
+                value={environmentVariablesText}
+                isDisabled={isFormDisabled}
+                onChange={setEnvironmentVariablesText}
+            />
 
             {(error ?? spawnError) ? (
                 <div className="px-3 py-2 text-sm text-red-600">
@@ -532,4 +546,45 @@ export function NewSession(props: {
             />
         </div>
     )
+}
+
+function parseEnvironmentVariables(value: string): Record<string, string> {
+    const entries: [string, string][] = []
+    for (const rawLine of value.split('\n')) {
+        const line = rawLine.trim()
+        if (!line || line.startsWith('#')) {
+            continue
+        }
+        const assignment = line.startsWith('export ') ? line.slice('export '.length).trimStart() : line
+        const separatorIndex = assignment.indexOf('=')
+        if (separatorIndex <= 0) {
+            continue
+        }
+        const key = assignment.slice(0, separatorIndex).trim()
+        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
+            continue
+        }
+        entries.push([key, parseEnvironmentVariableValue(assignment.slice(separatorIndex + 1))])
+    }
+    return Object.fromEntries(entries)
+}
+
+function parseEnvironmentVariableValue(value: string): string {
+    const trimmed = value.trim()
+    if (trimmed.length >= 2) {
+        const quote = trimmed[0]
+        if ((quote === '"' || quote === "'") && trimmed[trimmed.length - 1] === quote) {
+            return trimmed.slice(1, -1)
+        }
+    }
+    return trimmed
+}
+
+function formatEnvironmentVariables(value: Record<string, string> | undefined): string {
+    if (!value) {
+        return ''
+    }
+    return Object.entries(value)
+        .map(([key, envValue]) => `${key}=${envValue}`)
+        .join('\n')
 }

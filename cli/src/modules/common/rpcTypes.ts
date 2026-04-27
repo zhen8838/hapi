@@ -13,6 +13,7 @@ export interface SpawnSessionOptions {
     sessionType?: 'simple' | 'worktree'
     worktreeName?: string
     additionalParameters?: string[]
+    environmentVariables?: Record<string, string>
 }
 
 export type SpawnSessionResult =

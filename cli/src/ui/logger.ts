@@ -51,9 +51,8 @@ class Logger {
     public readonly logFilePath = getSessionLogPath()
   ) {
     // Remote logging enabled only when explicitly set with API URL
-    if (process.env.DANGEROUSLY_LOG_TO_SERVER_FOR_AI_AUTO_DEBUGGING
-      && process.env.HAPI_API_URL) {
-      this.dangerouslyUnencryptedServerLoggingUrl = process.env.HAPI_API_URL
+    this.dangerouslyUnencryptedServerLoggingUrl = this.resolveRemoteLoggingUrl()
+    if (this.dangerouslyUnencryptedServerLoggingUrl) {
       console.log(chalk.yellow('[REMOTE LOGGING] Sending logs to server for AI debugging'))
     }
   }
@@ -65,7 +64,7 @@ class Logger {
   }
 
   debug(message: string, ...args: unknown[]): void {
-    this.logToFile(`[${this.localTimezoneTimestamp()}]`, message, ...args)
+    this.logToFile('debug', message, ...args)
 
     // NOTE: @kirill does not think its a good ideas,
     // as it will break us using claude in interactive mode.
@@ -83,8 +82,9 @@ class Logger {
     maxStringLength: number = 100,
     maxArrayLength: number = 10,
   ): void {
-    if (!process.env.DEBUG) {
+    if (!this.isDebugEnabled()) {
       this.debug(`In production, skipping message inspection`)
+      return
     }
 
     // Some of our messages are huge, but we still want to show them in the logs
@@ -120,12 +120,12 @@ class Logger {
 
     const truncatedObject = truncateStrings(object)
     const json = JSON.stringify(truncatedObject, null, 2)
-    this.logToFile(`[${this.localTimezoneTimestamp()}]`, message, '\n', json)
+    this.logToFile('debug', message, '\n', json)
   }
   
   info(message: string, ...args: unknown[]): void {
     this.logToConsole('info', '', message, ...args)
-    this.debug(message, args)
+    this.logToFile('info', message, ...args)
   }
   
   infoDeveloper(message: string, ...args: unknown[]): void {
@@ -133,18 +133,22 @@ class Logger {
     this.debug(message, ...args)
     
     // Write to info if DEBUG mode is on
-    if (process.env.DEBUG) {
+    if (this.isDebugEnabled()) {
       this.logToConsole('info', '[DEV]', message, ...args)
     }
   }
   
   warn(message: string, ...args: unknown[]): void {
     this.logToConsole('warn', '', message, ...args)
-    this.debug(`[WARN] ${message}`, ...args)
+    this.logToFile('warn', message, ...args)
   }
   
   getLogPath(): string {
     return this.logFilePath
+  }
+
+  isDebugEnabled(): boolean {
+    return Boolean(process.env.DEBUG) || process.env.HAPI_LOG_LEVEL?.toLowerCase() === 'debug'
   }
   
   private logToConsole(level: 'debug' | 'error' | 'info' | 'warn', prefix: string, message: string, ...args: unknown[]): void {
@@ -177,6 +181,16 @@ class Logger {
     }
   }
 
+  private resolveRemoteLoggingUrl(): string | undefined {
+    if (process.env.HAPI_LOG_REMOTE_URL) {
+      return process.env.HAPI_LOG_REMOTE_URL
+    }
+    if (process.env.DANGEROUSLY_LOG_TO_SERVER_FOR_AI_AUTO_DEBUGGING && process.env.HAPI_API_URL) {
+      return process.env.HAPI_API_URL
+    }
+    return undefined
+  }
+
   private async sendToRemoteServer(level: string, message: string, ...args: unknown[]): Promise<void> {
     if (!this.dangerouslyUnencryptedServerLoggingUrl) return
     
@@ -199,18 +213,13 @@ class Logger {
     }
   }
 
-  private logToFile(prefix: string, message: string, ...args: unknown[]): void {
-    const logLine = `${prefix} ${message} ${args.map(arg => 
+  private logToFile(level: string, message: string, ...args: unknown[]): void {
+    const logLine = `[${this.localTimezoneTimestamp()}] [${level}] ${message} ${args.map(arg =>
       typeof arg === 'string' ? arg : JSON.stringify(arg)
     ).join(' ')}\n`
     
     // Send to remote server if configured
     if (this.dangerouslyUnencryptedServerLoggingUrl) {
-      // Determine log level from prefix
-      let level = 'info'
-      if (prefix.includes(this.localTimezoneTimestamp())) {
-        level = 'debug'
-      }
       // Fire and forget, with explicit .catch to prevent unhandled rejection
       this.sendToRemoteServer(level, message, ...args).catch(() => {
         // Silently ignore remote logging errors to prevent loops

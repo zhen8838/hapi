@@ -198,21 +198,27 @@ function TaskDetail({
         }
 
         let canceled = false
-        setOutput({ status: 'loading' })
-        readOutput(task.id)
-            .then((messages) => {
-                if (!canceled) setOutput({ status: 'loaded', messages })
-            })
-            .catch((error) => {
-                if (!canceled) {
-                    setOutput({ status: 'error', error: error instanceof Error ? error.message : String(error) })
-                }
-            })
+        const load = () => {
+            setOutput(current => current.status === 'idle' ? { status: 'loading' } : current)
+            readOutput(task.id)
+                .then((messages) => {
+                    if (!canceled) setOutput({ status: 'loaded', messages })
+                })
+                .catch((error) => {
+                    if (!canceled) {
+                        setOutput({ status: 'error', error: error instanceof Error ? error.message : String(error) })
+                    }
+                })
+        }
+
+        load()
+        const interval = task.status === 'running' ? window.setInterval(load, 2000) : null
 
         return () => {
             canceled = true
+            if (interval !== null) window.clearInterval(interval)
         }
-    }, [panelType, readOutput, task.id, task.outputFile])
+    }, [panelType, readOutput, task.id, task.outputFile, task.status])
 
     return (
         <div className="space-y-2 px-4 py-3 pr-10">

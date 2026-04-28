@@ -229,6 +229,13 @@ function TaskDetail({
                 ) : null}
             </div>
 
+            {task.description ? (
+                <div>
+                    <div className="mb-1 text-[var(--app-hint)]">Task:</div>
+                    <div className="text-[var(--app-fg)]">{task.description}</div>
+                </div>
+            ) : null}
+
             {panelType === 'shells' && task.command ? (
                 <div>
                     <div className="mb-1 text-[var(--app-hint)]">Command:</div>

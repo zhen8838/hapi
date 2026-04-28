@@ -1,11 +1,11 @@
-import { GEMINI_MODEL_PRESETS, GEMINI_MODEL_LABELS } from '@hapi/protocol'
+import { getDefaultModelOptionsForFlavor, type ModelOption } from '@hapi/protocol'
 
 export type AgentType = 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode'
 export type SessionType = 'simple' | 'worktree'
 export type CodexReasoningEffort = 'default' | 'low' | 'medium' | 'high' | 'xhigh'
 export type ClaudeEffort = 'auto' | 'medium' | 'high' | 'xhigh' | 'max'
 
-export const MODEL_OPTIONS: Record<AgentType, { value: string; label: string }[]> = {
+export const MODEL_OPTIONS: Record<AgentType, ModelOption[]> = {
     claude: [
         { value: 'auto', label: 'Auto' },
         { value: 'opus', label: 'Opus' },
@@ -15,18 +15,12 @@ export const MODEL_OPTIONS: Record<AgentType, { value: string; label: string }[]
     ],
     codex: [
         { value: 'auto', label: 'Auto' },
-        { value: 'gpt-5.4', label: 'GPT-5.4' },
-        { value: 'gpt-5.4-mini', label: 'GPT-5.4 Mini' },
-        { value: 'gpt-5.3-codex', label: 'GPT-5.3 Codex' },
-        { value: 'gpt-5.2-codex', label: 'GPT-5.2 Codex' },
-        { value: 'gpt-5.2', label: 'GPT-5.2' },
-        { value: 'gpt-5.1-codex-max', label: 'GPT-5.1 Codex Max' },
-        { value: 'gpt-5.1-codex-mini', label: 'GPT-5.1 Codex Mini' },
+        ...getDefaultModelOptionsForFlavor('codex'),
     ],
     cursor: [],
     gemini: [
         { value: 'auto', label: 'Default' },
-        ...GEMINI_MODEL_PRESETS.map(m => ({ value: m, label: GEMINI_MODEL_LABELS[m] })),
+        ...getDefaultModelOptionsForFlavor('gemini'),
     ],
     opencode: [],
 }

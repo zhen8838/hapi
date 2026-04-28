@@ -26,6 +26,10 @@ function taskNotification(taskId: string, summary: string) {
     })
 }
 
+function event(data: unknown) {
+    return { role: 'agent', content: { type: 'event', data } }
+}
+
 describe('BackgroundTaskTracker', () => {
     it('tracks a Bash background task through full lifecycle', () => {
         const tracker = new BackgroundTaskTracker()
@@ -147,6 +151,39 @@ describe('BackgroundTaskTracker', () => {
             content: 'Async agent launched successfully.\nagentId: agent-long'
         }]))
         expect(r!.started[0].prompt).toHaveLength(500)
+    })
+
+    it('tracks Codex background agent summaries after the main turn summary', () => {
+        const tracker = new BackgroundTaskTracker()
+
+        expect(tracker.processMessage(wrap({
+            type: 'summary',
+            summary: 'Main turn title',
+            leafUuid: 'main-uuid',
+        }))).toBeNull()
+
+        const r1 = tracker.processMessage(wrap({
+            type: 'summary',
+            summary: 'Inspect model flow',
+            leafUuid: 'agent-uuid-1',
+        }))
+
+        expect(r1).not.toBeNull()
+        expect(r1!.started).toHaveLength(1)
+        expect(r1!.started[0]).toMatchObject({
+            id: 'codex:agent-uuid-1',
+            toolUseId: 'agent-uuid-1',
+            type: 'agent',
+            description: 'Inspect model flow',
+            status: 'completed',
+        })
+
+        tracker.processMessage(event({ type: 'ready' }))
+        expect(tracker.processMessage(wrap({
+            type: 'summary',
+            summary: 'Next main turn',
+            leafUuid: 'main-uuid-2',
+        }))).toBeNull()
     })
 })
 

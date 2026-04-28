@@ -2,10 +2,12 @@ import { describe, expect, test } from 'bun:test'
 import {
     CLAUDE_MODEL_PRESETS,
     CLAUDE_MODEL_LABELS,
+    CODEX_MODEL_PRESETS,
     DEFAULT_GEMINI_MODEL,
     GEMINI_MODEL_LABELS,
     GEMINI_MODEL_PRESETS,
     getClaudeModelLabel,
+    getDefaultModelOptionsForFlavor,
     isClaudeModelPreset,
 } from './models'
 
@@ -62,5 +64,13 @@ describe('model constants consistency', () => {
 
     test('DEFAULT_GEMINI_MODEL is a valid preset', () => {
         expect(GEMINI_MODEL_PRESETS).toContain(DEFAULT_GEMINI_MODEL)
+    })
+})
+
+describe('getDefaultModelOptionsForFlavor', () => {
+    test('returns Codex presets with friendly labels', () => {
+        const options = getDefaultModelOptionsForFlavor('codex')
+        expect(options[0]).toEqual({ value: 'gpt-5.5', label: 'GPT-5.5' })
+        expect(options.map((option) => option.value)).toEqual(CODEX_MODEL_PRESETS)
     })
 })

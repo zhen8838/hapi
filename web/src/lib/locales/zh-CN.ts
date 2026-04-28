@@ -90,6 +90,7 @@ export default {
   'button.dismiss': '忽略',
   'button.copy': '复制',
   'button.paste': '粘贴',
+  'button.apply': '应用',
 
   // New session form
   'newSession.title': '创建会话',
@@ -113,6 +114,7 @@ export default {
   'newSession.profile.promptName': '配置名称',
   'newSession.profile.confirmDelete': '删除配置“{name}”？',
   'newSession.model': '模型',
+  'newSession.model.custom': '自定义…',
   'newSession.effort': '思考强度',
   'newSession.model.optional': '可选',
   'newSession.reasoningEffort': '推理强度',

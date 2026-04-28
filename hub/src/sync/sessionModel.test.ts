@@ -15,6 +15,10 @@ function createPublisher(events: SyncEvent[]): EventPublisher {
     } as unknown as EventPublisher
 }
 
+function codexOutput(data: unknown) {
+    return { role: 'agent', content: { type: 'output', data } }
+}
+
 describe('session model', () => {
     it('includes explicit model in session summaries', () => {
         const store = new Store(':memory:')
@@ -69,6 +73,34 @@ describe('session model', () => {
 
         expect(session.modelReasoningEffort).toBe('xhigh')
         expect(store.sessions.getSession(session.id)?.modelReasoningEffort).toBe('xhigh')
+    })
+
+    it('recovers Codex background task summaries from stored messages', () => {
+        const store = new Store(':memory:')
+        const events: SyncEvent[] = []
+        const cache = new SessionCache(store, createPublisher(events))
+
+        const session = cache.getOrCreateSession(
+            'session-codex-background-recovery',
+            { path: '/tmp/project', host: 'localhost', flavor: 'codex' },
+            null,
+            'default',
+            'gpt-5.5'
+        )
+
+        store.messages.addMessage(session.id, { role: 'agent', content: { type: 'event', data: { type: 'ready' } } })
+        store.messages.addMessage(session.id, codexOutput({ type: 'summary', summary: 'Main turn summary', leafUuid: 'main' }))
+        store.messages.addMessage(session.id, codexOutput({ type: 'summary', summary: 'Inspect Codex support', leafUuid: 'task-1' }))
+
+        const recovered = new SessionCache(store, createPublisher(events)).refreshSession(session.id)
+
+        expect(recovered?.backgroundTasks).toHaveLength(1)
+        expect(recovered?.backgroundTasks?.[0]).toMatchObject({
+            id: 'codex:task-1',
+            type: 'agent',
+            description: 'Inspect Codex support',
+            status: 'completed',
+        })
     })
 
     it('preserves model from old session when merging into resumed session', async () => {

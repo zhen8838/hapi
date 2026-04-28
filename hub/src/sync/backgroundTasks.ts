@@ -43,6 +43,7 @@ type PendingToolUse = {
 export class BackgroundTaskTracker {
     /** Pending tool_uses from assistant messages, keyed by tool_use_id */
     private pending = new Map<string, PendingToolUse>()
+    private codexSummaryCountInTurn = 0
 
     /**
      * Process a message and return any background task events.
@@ -50,10 +51,25 @@ export class BackgroundTaskTracker {
     processMessage(messageContent: unknown): BackgroundTaskEvent | null {
         const record = unwrapRoleWrappedRecordEnvelope(messageContent)
         if (!record || record.role !== 'agent') return null
-        if (!isObject(record.content) || record.content.type !== 'output') return null
+        if (!isObject(record.content)) return null
+
+        if (record.content.type === 'event') {
+            const data = isObject(record.content.data) ? record.content.data : null
+            if (data?.type === 'ready') {
+                this.codexSummaryCountInTurn = 0
+            }
+            return null
+        }
+
+        if (record.content.type !== 'output') return null
 
         const data = isObject(record.content.data) ? record.content.data : null
         if (!data) return null
+
+        const codexSummaryTask = this.matchCodexSummary(data)
+        if (codexSummaryTask) {
+            return { started: [codexSummaryTask], completed: [] }
+        }
 
         // Phase 1: Extract pending tool_uses from assistant messages
         if (data.type === 'assistant') {
@@ -68,6 +84,28 @@ export class BackgroundTaskTracker {
 
         if (starts.length === 0 && completions.length === 0) return null
         return { started: starts, completed: completions }
+    }
+
+    private matchCodexSummary(data: Record<string, unknown>): BackgroundTask | null {
+        if (data.type !== 'summary') return null
+
+        this.codexSummaryCountInTurn += 1
+        if (this.codexSummaryCountInTurn === 1) return null
+
+        const summary = typeof data.summary === 'string' ? data.summary.trim() : ''
+        const leafUuid = typeof data.leafUuid === 'string' ? data.leafUuid : ''
+        if (!summary || !leafUuid) return null
+
+        const now = Date.now()
+        return {
+            id: `codex:${leafUuid}`,
+            toolUseId: leafUuid,
+            type: 'agent',
+            description: summary,
+            status: 'completed',
+            startedAt: now,
+            completedAt: now,
+        }
     }
 
     /**

@@ -120,6 +120,10 @@ export class SessionCache {
             return parsed.success ? parsed.data : undefined
         })()
 
+        const backgroundTasks = existing?.backgroundTasks?.length
+            ? existing.backgroundTasks
+            : this.recoverBackgroundTasks(sessionId)
+
         const session: Session = {
             id: stored.id,
             namespace: stored.namespace,
@@ -134,8 +138,8 @@ export class SessionCache {
             agentStateVersion: stored.agentStateVersion,
             thinking: existing?.thinking ?? false,
             thinkingAt: existing?.thinkingAt ?? 0,
-            backgroundTaskCount: existing?.backgroundTaskCount ?? 0,
-            backgroundTasks: existing?.backgroundTasks,
+            backgroundTaskCount: existing?.backgroundTaskCount ?? backgroundTasks.filter(t => t.status === 'running').length,
+            backgroundTasks,
             todos,
             teamState,
             model: stored.model,
@@ -148,6 +152,19 @@ export class SessionCache {
         this.sessions.set(sessionId, session)
         this.publisher.emit({ type: existing ? 'session-updated' : 'session-added', sessionId, data: session })
         return session
+    }
+
+    private recoverBackgroundTasks(sessionId: string): BackgroundTask[] {
+        const tracker = new BackgroundTaskTracker()
+        const tasks: BackgroundTask[] = []
+
+        for (const message of this.store.messages.getMessages(sessionId, 200)) {
+            const event = tracker.processMessage(message.content)
+            if (!event) continue
+            applyBackgroundTaskEvent(tasks, event)
+        }
+
+        return tasks
     }
 
     reloadAll(): void {
@@ -280,28 +297,7 @@ export class SessionCache {
         const tasks = session.backgroundTasks ? [...session.backgroundTasks] : []
         let changed = false
 
-        for (const started of event.started) {
-            if (!tasks.some(t => t.id === started.id)) {
-                tasks.push(started)
-                changed = true
-            }
-        }
-
-        for (const completion of event.completed) {
-            const idx = tasks.findIndex(t => t.id === completion.taskId
-                || t.toolUseId === completion.taskId
-                || t.toolUseId === completion.toolUseId)
-            if (idx >= 0) {
-                tasks[idx] = {
-                    ...tasks[idx],
-                    status: 'completed',
-                    completedAt: Date.now(),
-                    summary: completion.summary,
-                    outputFile: completion.outputFile ?? tasks[idx].outputFile,
-                }
-                changed = true
-            }
-        }
+        changed = applyBackgroundTaskEvent(tasks, event)
 
         if (!changed) return
 
@@ -599,4 +595,33 @@ export class SessionCache {
 
         return changed ? merged : newMetadata
     }
+}
+
+function applyBackgroundTaskEvent(tasks: BackgroundTask[], event: BackgroundTaskEvent): boolean {
+    let changed = false
+
+    for (const started of event.started) {
+        if (!tasks.some(t => t.id === started.id)) {
+            tasks.push(started)
+            changed = true
+        }
+    }
+
+    for (const completion of event.completed) {
+        const idx = tasks.findIndex(t => t.id === completion.taskId
+            || t.toolUseId === completion.taskId
+            || t.toolUseId === completion.toolUseId)
+        if (idx >= 0) {
+            tasks[idx] = {
+                ...tasks[idx],
+                status: 'completed',
+                completedAt: Date.now(),
+                summary: completion.summary,
+                outputFile: completion.outputFile ?? tasks[idx].outputFile,
+            }
+            changed = true
+        }
+    }
+
+    return changed
 }

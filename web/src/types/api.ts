@@ -1,5 +1,6 @@
 import type {
     DecryptedMessage as ProtocolDecryptedMessage,
+    ModelOption,
     Session,
     SessionSummary,
     SyncEvent as ProtocolSyncEvent,
@@ -95,6 +96,9 @@ export type MessagesResponse = {
 
 export type MachinesResponse = { machines: Machine[] }
 export type MachinePathsExistsResponse = { exists: Record<string, boolean> }
+export type ModelOptionsResponse = {
+    options: Partial<Record<'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode', ModelOption[]>>
+}
 
 export type SpawnResponse =
     | { type: 'success'; sessionId: string }

@@ -20,6 +20,13 @@ describe('Claude model options', () => {
     })
 })
 
+describe('Codex model options', () => {
+    it('includes GPT-5.5 as the first explicit Codex model', () => {
+        expect(MODEL_OPTIONS.codex[0]).toEqual({ value: 'auto', label: 'Auto' })
+        expect(MODEL_OPTIONS.codex[1]).toEqual({ value: 'gpt-5.5', label: 'GPT-5.5' })
+    })
+})
+
 describe('Claude effort options', () => {
     it('matches supported effort presets in expected order', () => {
         expect(CLAUDE_EFFORT_OPTIONS).toEqual([

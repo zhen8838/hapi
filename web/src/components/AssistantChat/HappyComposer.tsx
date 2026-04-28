@@ -1,4 +1,5 @@
 import { getCodexCollaborationModeOptions, getPermissionModeOptionsForFlavor } from '@hapi/protocol'
+import type { ModelOption } from '@hapi/protocol'
 import { ComposerPrimitive, useAssistantApi, useAssistantState } from '@assistant-ui/react'
 import {
     type ChangeEvent as ReactChangeEvent,
@@ -71,6 +72,7 @@ export function HappyComposer(props: {
     permissionMode?: PermissionMode
     collaborationMode?: CodexCollaborationMode
     model?: string | null
+    modelOptions?: ModelOption[]
     modelReasoningEffort?: string | null
     effort?: string | null
     active?: boolean
@@ -109,6 +111,7 @@ export function HappyComposer(props: {
         permissionMode: rawPermissionMode,
         collaborationMode: rawCollaborationMode,
         model: rawModel,
+        modelOptions,
         modelReasoningEffort: rawModelReasoningEffort,
         effort: rawEffort,
         active = true,
@@ -208,6 +211,7 @@ export function HappyComposer(props: {
         selection: { start: 0, end: 0 }
     })
     const [showSettings, setShowSettings] = useState(false)
+    const [customModelText, setCustomModelText] = useState('')
     const [isAborting, setIsAborting] = useState(false)
     const [isSwitching, setIsSwitching] = useState(false)
     const [showContinueHint, setShowContinueHint] = useState(false)
@@ -388,8 +392,8 @@ export function HappyComposer(props: {
         [agentFlavor]
     )
     const claudeModelOptions = useMemo(
-        () => getModelOptionsForFlavor(agentFlavor, model),
-        [agentFlavor, model]
+        () => getModelOptionsForFlavor(agentFlavor, model, modelOptions),
+        [agentFlavor, model, modelOptions]
     )
     const codexReasoningEffortOptions = useMemo(
         () => agentFlavor === 'codex' ? getCodexComposerReasoningEffortOptions(modelReasoningEffort) : [],
@@ -496,14 +500,14 @@ export function HappyComposer(props: {
         const handleGlobalKeyDown = (e: globalThis.KeyboardEvent) => {
             if (e.key === 'm' && (e.metaKey || e.ctrlKey) && onModelChange && supportsModelChange(agentFlavor)) {
                 e.preventDefault()
-                onModelChange(getNextModelForFlavor(agentFlavor, model))
+                onModelChange(getNextModelForFlavor(agentFlavor, model, modelOptions))
                 haptic('light')
             }
         }
 
         window.addEventListener('keydown', handleGlobalKeyDown)
         return () => window.removeEventListener('keydown', handleGlobalKeyDown)
-    }, [model, onModelChange, haptic, agentFlavor])
+    }, [model, modelOptions, onModelChange, haptic, agentFlavor])
 
     const handleChange = useCallback((e: ReactChangeEvent<HTMLTextAreaElement>) => {
         const selection = {
@@ -571,6 +575,13 @@ export function HappyComposer(props: {
         setShowSettings(false)
         haptic('light')
     }, [onModelChange, controlsDisabled, haptic])
+
+    const handleCustomModelSubmit = useCallback((event: ReactFormEvent<HTMLFormElement>) => {
+        event.preventDefault()
+        const nextModel = customModelText.trim()
+        if (!nextModel) return
+        handleModelChange(nextModel)
+    }, [customModelText, handleModelChange])
 
     const handleModelReasoningEffortChange = useCallback((nextModelReasoningEffort: string | null) => {
         if (!onModelReasoningEffortChange || controlsDisabled) return
@@ -748,6 +759,26 @@ export function HappyComposer(props: {
                                         </span>
                                     </button>
                                 ))}
+                                <form
+                                    className="flex gap-2 px-3 py-2"
+                                    onSubmit={handleCustomModelSubmit}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                >
+                                    <input
+                                        value={customModelText}
+                                        onChange={(e) => setCustomModelText(e.target.value)}
+                                        disabled={controlsDisabled}
+                                        placeholder="gpt-..."
+                                        className="min-w-0 flex-1 rounded-md border border-[var(--app-border)] bg-[var(--app-bg)] px-2 py-1.5 text-sm text-[var(--app-fg)] outline-none focus:ring-1 focus:ring-[var(--app-link)] disabled:cursor-not-allowed disabled:opacity-50"
+                                    />
+                                    <button
+                                        type="submit"
+                                        disabled={controlsDisabled || !customModelText.trim()}
+                                        className="rounded-md px-2 py-1.5 text-sm text-[var(--app-link)] disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        {t('button.apply')}
+                                    </button>
+                                </form>
                             </div>
                         ) : null}
 
@@ -872,9 +903,11 @@ export function HappyComposer(props: {
         effort,
         collaborationModeOptions,
         permissionModeOptions,
+        customModelText,
         handleCollaborationChange,
         handlePermissionChange,
         handleModelChange,
+        handleCustomModelSubmit,
         handleModelReasoningEffortChange,
         handleEffortChange,
         handleSuggestionSelect,

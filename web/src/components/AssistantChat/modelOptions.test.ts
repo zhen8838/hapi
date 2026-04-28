@@ -16,6 +16,12 @@ describe('getModelOptionsForFlavor', () => {
         expect(options.some((o) => o.value === 'opus')).toBe(true)
     })
 
+    it('returns Codex model options for codex flavor', () => {
+        const options = getModelOptionsForFlavor('codex')
+        expect(options[0]).toEqual({ value: null, label: 'Auto' })
+        expect(options.some((o) => o.value === 'gpt-5.5')).toBe(true)
+    })
+
     it('includes custom Gemini model from env/config in options', () => {
         const options = getModelOptionsForFlavor('gemini', 'gemini-custom-experiment')
         expect(options.some((o) => o.value === 'gemini-custom-experiment')).toBe(true)
@@ -37,5 +43,9 @@ describe('getNextModelForFlavor', () => {
     it('cycles Claude models', () => {
         const next = getNextModelForFlavor('claude', null)
         expect(next).not.toBeNull()
+    })
+
+    it('cycles Codex models', () => {
+        expect(getNextModelForFlavor('codex', null)).toBe('gpt-5.5')
     })
 })

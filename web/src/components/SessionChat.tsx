@@ -26,6 +26,7 @@ import { SessionHeader } from '@/components/SessionHeader'
 import { TeamPanel } from '@/components/TeamPanel'
 import { usePlatform } from '@/hooks/usePlatform'
 import { useSessionActions } from '@/hooks/mutations/useSessionActions'
+import { useModelOptions } from '@/hooks/queries/useModelOptions'
 import { useVoiceOptional } from '@/lib/voice-context'
 import { RealtimeVoiceSession, registerSessionStore, registerVoiceHooksStore, voiceHooks } from '@/realtime'
 import { isRemoteTerminalSupported } from '@/utils/terminalSupport'
@@ -55,6 +56,7 @@ export function SessionChat(props: {
     const { haptic } = usePlatform()
     const { addToast } = useToast()
     const { t } = useTranslation()
+    const { getOptions: getModelOptions } = useModelOptions(props.api, true)
     const navigate = useNavigate()
     const sessionInactive = !props.session.active
     const terminalSupported = isRemoteTerminalSupported(props.session.metadata)
@@ -238,9 +240,9 @@ export function SessionChat(props: {
     const backgroundTasks = useMemo(
         () => mergeBackgroundTasks(
             props.session.backgroundTasks,
-            extractHistoricalBackgroundTasks(reconciled.blocks)
+            extractHistoricalBackgroundTasks(reconciled.blocks, props.messages)
         ),
-        [props.session.backgroundTasks, reconciled.blocks]
+        [props.session.backgroundTasks, reconciled.blocks, props.messages]
     )
 
     useEffect(() => {
@@ -430,6 +432,7 @@ export function SessionChat(props: {
                         permissionMode={props.session.permissionMode}
                         collaborationMode={codexCollaborationModeSupported ? props.session.collaborationMode : undefined}
                         model={props.session.model}
+                        modelOptions={getModelOptions(agentFlavor)}
                         modelReasoningEffort={agentFlavor === 'codex' ? props.session.modelReasoningEffort : undefined}
                         effort={props.session.effort}
                         agentFlavor={agentFlavor}
@@ -500,12 +503,24 @@ function mergeBackgroundTasks(
 
     const seen = new Set(current.flatMap(task => [task.id, task.toolUseId]))
     return [
-        ...current,
+        ...current.map(task => {
+            const match = historical.find(h => h.id === task.id || h.toolUseId === task.toolUseId)
+            if (!match) return task
+            return {
+                ...task,
+                description: task.description ?? match.description,
+                prompt: task.prompt ?? match.prompt,
+                subagentType: task.subagentType ?? match.subagentType,
+                command: task.command ?? match.command,
+                summary: task.summary ?? match.summary,
+                outputFile: task.outputFile ?? match.outputFile,
+            }
+        }),
         ...historical.filter(task => !seen.has(task.id) && !seen.has(task.toolUseId))
     ]
 }
 
-function extractHistoricalBackgroundTasks(blocks: ChatBlock[]): BackgroundTask[] {
+function extractHistoricalBackgroundTasks(blocks: ChatBlock[], messages: DecryptedMessage[]): BackgroundTask[] {
     const tasks: BackgroundTask[] = []
 
     for (const block of blocks) {
@@ -513,7 +528,58 @@ function extractHistoricalBackgroundTasks(blocks: ChatBlock[]): BackgroundTask[]
         collectBackgroundAgentTask(block, tasks)
     }
 
+    collectCodexSummaryTasks(messages, tasks)
+
     return tasks
+}
+
+function collectCodexSummaryTasks(messages: DecryptedMessage[], tasks: BackgroundTask[]): void {
+    let summaryCountInTurn = 0
+    let lastUserPrompt: string | undefined
+
+    for (const message of messages) {
+        const userText = getWebUserText(message.content)
+        if (userText !== null) {
+            summaryCountInTurn = 0
+            lastUserPrompt = userText.slice(0, 500)
+            continue
+        }
+
+        const summary = getCodexSummary(message.content)
+        if (!summary) continue
+
+        summaryCountInTurn += 1
+        if (summaryCountInTurn === 1) continue
+
+        tasks.push({
+            id: `codex:${summary.leafUuid}`,
+            toolUseId: summary.leafUuid,
+            type: 'agent',
+            description: summary.text,
+            prompt: lastUserPrompt,
+            status: 'completed',
+            startedAt: message.createdAt,
+            completedAt: message.createdAt,
+        })
+    }
+}
+
+function getWebUserText(content: unknown): string | null {
+    if (!isRecord(content) || content.role !== 'user') return null
+    const body = isRecord(content.content) ? content.content : null
+    return body?.type === 'text' && typeof body.text === 'string' ? body.text : null
+}
+
+function getCodexSummary(content: unknown): { text: string; leafUuid: string } | null {
+    if (!isRecord(content) || content.role !== 'agent') return null
+    const envelope = isRecord(content.content) ? content.content : null
+    if (envelope?.type !== 'output') return null
+    const data = isRecord(envelope.data) ? envelope.data : null
+    if (data?.type !== 'summary') return null
+
+    const text = typeof data.summary === 'string' ? data.summary.trim() : ''
+    const leafUuid = typeof data.leafUuid === 'string' ? data.leafUuid : ''
+    return text && leafUuid ? { text, leafUuid } : null
 }
 
 function collectBackgroundAgentTask(block: ToolCallBlock, tasks: BackgroundTask[]): void {

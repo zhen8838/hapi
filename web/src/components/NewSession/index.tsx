@@ -6,12 +6,13 @@ import { useMachinePathsExists } from '@/hooks/useMachinePathsExists'
 import { useSpawnSession } from '@/hooks/mutations/useSpawnSession'
 import { useSessions } from '@/hooks/queries/useSessions'
 import { useProfiles } from '@/hooks/queries/useProfiles'
+import { useModelOptions } from '@/hooks/queries/useModelOptions'
 import { useActiveSuggestions, type Suggestion } from '@/hooks/useActiveSuggestions'
 import { useDirectorySuggestions } from '@/hooks/useDirectorySuggestions'
 import { useRecentPaths } from '@/hooks/useRecentPaths'
 import { useTranslation } from '@/lib/use-translation'
 import { makeClientSideId } from '@/lib/messages'
-import type { AgentType, ClaudeEffort, CodexReasoningEffort, SessionType } from './types'
+import { MODEL_OPTIONS, type AgentType, type ClaudeEffort, type CodexReasoningEffort, type SessionType } from './types'
 import { ActionButtons } from './ActionButtons'
 import { AdditionalParametersSection } from './AdditionalParametersSection'
 import { AgentSelector } from './AgentSelector'
@@ -45,6 +46,7 @@ export function NewSession(props: {
     const { spawnSession, isPending, error: spawnError } = useSpawnSession(props.api)
     const { sessions } = useSessions(props.api)
     const { profiles, saveProfile, deleteProfile: deleteProfileApi } = useProfiles(props.api)
+    const { getOptions: getModelOptions } = useModelOptions(props.api, true)
     const isFormDisabled = Boolean(isPending || props.isLoading)
     const { getRecentPaths, addRecentPath, getLastUsedMachineId, setLastUsedMachineId } = useRecentPaths()
 
@@ -210,6 +212,12 @@ export function NewSession(props: {
     const currentDirectoryExists = trimmedDirectory ? pathExistence[trimmedDirectory] : undefined
     const needsDirectoryCreationWarning = sessionType === 'simple' && trimmedDirectory !== '' && currentDirectoryExists === false
     const missingWorktreeDirectory = sessionType === 'worktree' && trimmedDirectory !== '' && currentDirectoryExists === false
+    const modelOptions = useMemo(() => {
+        const options = getModelOptions(agent)
+        const autoOption = MODEL_OPTIONS[agent].find((option) => option.value === 'auto')
+        if (!autoOption || options.length === 0) return options
+        return [autoOption, ...options.filter((option) => option.value !== autoOption.value)]
+    }, [agent, getModelOptions])
     const directoryStatusMessage = missingWorktreeDirectory
         ? t('session.directoryMissingWorktree')
         : needsDirectoryCreationWarning
@@ -398,7 +406,8 @@ export function NewSession(props: {
                 return
             }
 
-            const resolvedModel = model !== 'auto' && agent !== 'opencode' ? model : undefined
+            const trimmedModel = model.trim()
+            const resolvedModel = trimmedModel && trimmedModel !== 'auto' && agent !== 'opencode' ? trimmedModel : undefined
             const resolvedEffort = agent === 'claude' && effort !== 'auto' ? effort : undefined
             const resolvedModelReasoningEffort = agent === 'codex' && modelReasoningEffort !== 'default'
                 ? modelReasoningEffort
@@ -498,6 +507,7 @@ export function NewSession(props: {
             <ModelSelector
                 agent={agent}
                 model={model}
+                options={modelOptions}
                 isDisabled={isFormDisabled}
                 onModelChange={setModel}
             />

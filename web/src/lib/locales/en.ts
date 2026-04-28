@@ -94,6 +94,7 @@ export default {
   'button.dismiss': 'Dismiss',
   'button.copy': 'Copy',
   'button.paste': 'Paste',
+  'button.apply': 'Apply',
 
   // New session form
   'newSession.title': 'Create Session',
@@ -117,6 +118,7 @@ export default {
   'newSession.profile.promptName': 'Profile name',
   'newSession.profile.confirmDelete': 'Delete profile "{name}"?',
   'newSession.model': 'Model',
+  'newSession.model.custom': 'Custom...',
   'newSession.effort': 'Effort',
   'newSession.model.optional': 'optional',
   'newSession.reasoningEffort': 'Reasoning effort',

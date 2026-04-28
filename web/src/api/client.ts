@@ -11,6 +11,7 @@ import type {
     MachinePathsExistsResponse,
     MachinesResponse,
     MessagesResponse,
+    ModelOptionsResponse,
     PermissionMode,
     PushSubscriptionPayload,
     PushUnsubscribePayload,
@@ -394,6 +395,10 @@ export class ApiClient {
 
     async getMachines(): Promise<MachinesResponse> {
         return await this.request<MachinesResponse>('/api/machines')
+    }
+
+    async getModelOptions(): Promise<ModelOptionsResponse> {
+        return await this.request<ModelOptionsResponse>('/api/models')
     }
 
     async checkMachinePathsExists(

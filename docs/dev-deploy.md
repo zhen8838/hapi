@@ -81,6 +81,7 @@ cat > ~/.local/bin/hapi-dev <<'EOF2'
 #!/usr/bin/env bash
 set -euo pipefail
 export PATH="$HOME/.bun/bin:$PATH"
+export HAPI_INVOKED_CWD="${HAPI_INVOKED_CWD:-$PWD}"
 cd /path/to/hapi/cli
 exec bun src/index.ts "$@"
 EOF2

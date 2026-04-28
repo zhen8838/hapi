@@ -73,6 +73,33 @@ const THREAD_MESSAGE_COMPONENTS = {
     SystemMessage: HappySystemMessage
 } as const
 
+type PendingScroll = {
+    scrollTop: number
+    scrollHeight: number
+    anchor: {
+        element: HTMLElement
+        top: number
+    } | null
+}
+
+function findScrollAnchor(viewport: HTMLElement): PendingScroll['anchor'] {
+    const messages = viewport.querySelector<HTMLElement>('.happy-thread-messages')
+    if (!messages) return null
+
+    const viewportTop = viewport.getBoundingClientRect().top
+    for (const child of Array.from(messages.children)) {
+        if (!(child instanceof HTMLElement)) continue
+        const rect = child.getBoundingClientRect()
+        if (rect.bottom > viewportTop) {
+            return {
+                element: child,
+                top: rect.top - viewportTop,
+            }
+        }
+    }
+    return null
+}
+
 export function HappyThread(props: {
     api: ApiClient
     sessionId: string
@@ -97,9 +124,7 @@ export function HappyThread(props: {
     const viewportRef = useRef<HTMLDivElement | null>(null)
     const topSentinelRef = useRef<HTMLDivElement | null>(null)
     const loadLockRef = useRef(false)
-    const pendingScrollRef = useRef<{ scrollTop: number; scrollHeight: number } | null>(null)
-    const prevLoadingMoreRef = useRef(false)
-    const loadStartedRef = useRef(false)
+    const pendingScrollRef = useRef<PendingScroll | null>(null)
     const isLoadingMoreRef = useRef(props.isLoadingMoreMessages)
     const hasMoreMessagesRef = useRef(props.hasMoreMessages)
     const isLoadingMessagesRef = useRef(props.isLoadingMessages)
@@ -263,10 +288,14 @@ export function HappyThread(props: {
         }
         pendingScrollRef.current = {
             scrollTop: viewport.scrollTop,
-            scrollHeight: viewport.scrollHeight
+            scrollHeight: viewport.scrollHeight,
+            anchor: findScrollAnchor(viewport),
+        }
+        const activeElement = document.activeElement
+        if (activeElement instanceof HTMLElement && viewport.contains(activeElement)) {
+            activeElement.blur()
         }
         loadLockRef.current = true
-        loadStartedRef.current = false
         let loadPromise: Promise<unknown>
         try {
             loadPromise = onLoadMoreRef.current()
@@ -280,10 +309,12 @@ export function HappyThread(props: {
             loadLockRef.current = false
             console.error('Failed to load older messages:', error)
         }).finally(() => {
-            if (!loadStartedRef.current && !isLoadingMoreRef.current && pendingScrollRef.current) {
-                pendingScrollRef.current = null
-                loadLockRef.current = false
-            }
+            setTimeout(() => {
+                if (!isLoadingMoreRef.current && pendingScrollRef.current) {
+                    pendingScrollRef.current = null
+                    loadLockRef.current = false
+                }
+            }, 5000)
         })
     }, [])
 
@@ -320,32 +351,49 @@ export function HappyThread(props: {
     }, [props.hasMoreMessages, props.isLoadingMessages])
 
     useLayoutEffect(() => {
-        const pending = pendingScrollRef.current
         const viewport = viewportRef.current
-        if (!pending || !viewport) {
+        if (!viewport || !pendingScrollRef.current) {
             return
         }
-        const delta = viewport.scrollHeight - pending.scrollHeight
-        viewport.scrollTop = pending.scrollTop + delta
-        viewportMetricsRef.current = {
-            scrollTop: viewport.scrollTop,
-            scrollHeight: viewport.scrollHeight,
-            clientHeight: viewport.clientHeight,
+
+        let frameId: number | null = null
+        let frames = 0
+        const retainScroll = () => {
+            const pending = pendingScrollRef.current
+            if (!pending) return
+
+            if (pending.anchor && pending.anchor.element.isConnected) {
+                const viewportTop = viewport.getBoundingClientRect().top
+                const nextTop = pending.anchor.element.getBoundingClientRect().top - viewportTop
+                viewport.scrollTop += nextTop - pending.anchor.top
+            } else {
+                const delta = viewport.scrollHeight - pending.scrollHeight
+                viewport.scrollTop = pending.scrollTop + Math.max(0, delta)
+            }
+            viewportMetricsRef.current = {
+                scrollTop: viewport.scrollTop,
+                scrollHeight: viewport.scrollHeight,
+                clientHeight: viewport.clientHeight,
+            }
+
+            frames += 1
+            if (frames < 30) {
+                frameId = requestAnimationFrame(retainScroll)
+                return
+            }
+
+            pendingScrollRef.current = null
+            loadLockRef.current = false
         }
-        pendingScrollRef.current = null
-        loadLockRef.current = false
+
+        frameId = requestAnimationFrame(retainScroll)
+        return () => {
+            if (frameId !== null) cancelAnimationFrame(frameId)
+        }
     }, [props.messagesVersion])
 
     useEffect(() => {
         isLoadingMoreRef.current = props.isLoadingMoreMessages
-        if (props.isLoadingMoreMessages) {
-            loadStartedRef.current = true
-        }
-        if (prevLoadingMoreRef.current && !props.isLoadingMoreMessages && pendingScrollRef.current) {
-            pendingScrollRef.current = null
-            loadLockRef.current = false
-        }
-        prevLoadingMoreRef.current = props.isLoadingMoreMessages
     }, [props.isLoadingMoreMessages])
 
     const showSkeleton = props.isLoadingMessages && props.rawMessagesCount === 0 && props.pendingCount === 0

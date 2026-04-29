@@ -212,7 +212,8 @@ export class SyncEngine {
     }
 
     handleBackgroundTaskEvent(sessionId: string, messageContent: unknown): void {
-        const tracker = this.sessionCache.getOrCreateTaskTracker(sessionId)
+        const session = this.getSession(sessionId)
+        const tracker = this.sessionCache.getOrCreateTaskTracker(sessionId, session?.metadata?.flavor)
         const event = tracker.processMessage(messageContent)
         if (event) {
             this.sessionCache.processBackgroundTaskEvent(sessionId, event)
@@ -611,6 +612,11 @@ export class SyncEngine {
     }
 
     async readTaskOutput(sessionId: string, path: string): Promise<RpcTaskOutputResponse> {
+        const inlineMessages = this.sessionCache.readInlineBackgroundTaskOutput(sessionId, path)
+        if (inlineMessages) {
+            return { success: true, messages: inlineMessages }
+        }
+
         const session = this.getSession(sessionId)
         const flavor = session?.metadata?.flavor ?? 'claude'
         let sessionError: unknown = null

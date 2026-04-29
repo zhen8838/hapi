@@ -189,7 +189,7 @@ function TaskDetail({
     )
 
     useEffect(() => {
-        if (panelType !== 'agents' || !task.outputFile || !readOutput) {
+        if (!task.outputFile || !readOutput) {
             setOutput({ status: 'idle' })
             return
         }
@@ -264,7 +264,7 @@ function TaskDetail({
                 </div>
             ) : null}
 
-            {panelType === 'agents' && task.outputFile ? (
+            {task.outputFile ? (
                 <div>
                     <div className="mb-1 text-[var(--app-hint)]">Output:</div>
                     <div className="max-h-72 overflow-y-auto rounded-md bg-[var(--app-bg)] p-2 text-[13px] leading-relaxed text-[var(--app-fg)]">

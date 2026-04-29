@@ -19,6 +19,125 @@ export type BackgroundTask = {
     outputFile?: string
 }
 
+export type BackgroundTaskTrackerFlavor = 'claude' | 'codex'
+
+const CODEX_INLINE_OUTPUT_PREFIX = 'codex-inline:'
+const CODEX_SUMMARY_OUTPUT_PREFIX = 'codex-summary:'
+
+export function normalizeBackgroundTaskTrackerFlavor(flavor?: string | null): BackgroundTaskTrackerFlavor {
+    return flavor === 'codex' ? 'codex' : 'claude'
+}
+
+export function buildCodexInlineOutputRef(callId: string): string {
+    return `${CODEX_INLINE_OUTPUT_PREFIX}${callId}`
+}
+
+export function parseCodexInlineOutputRef(ref: string): string | null {
+    return ref.startsWith(CODEX_INLINE_OUTPUT_PREFIX) ? ref.slice(CODEX_INLINE_OUTPUT_PREFIX.length) : null
+}
+
+export function buildCodexSummaryOutputRef(leafUuid: string): string {
+    return `${CODEX_SUMMARY_OUTPUT_PREFIX}${leafUuid}`
+}
+
+export function parseCodexSummaryOutputRef(ref: string): string | null {
+    return ref.startsWith(CODEX_SUMMARY_OUTPUT_PREFIX) ? ref.slice(CODEX_SUMMARY_OUTPUT_PREFIX.length) : null
+}
+
+export function extractCodexInlineOutputRecords(messageContents: unknown[], ref: string): unknown[] | null {
+    const callId = parseCodexInlineOutputRef(ref)
+    const leafUuid = parseCodexSummaryOutputRef(ref)
+    if (!callId && !leafUuid) return null
+
+    if (leafUuid) {
+        const summaryOutputs = new Map<string, unknown[]>()
+        const activeSummaryIds: string[] = []
+        let summaryCount = 0
+        let pendingMessageRecords: unknown[] = []
+
+        for (const messageContent of messageContents) {
+            const record = unwrapRoleWrappedRecordEnvelope(messageContent)
+            if (!record) continue
+            if (record.role !== 'agent') continue
+            if (!isObject(record.content)) continue
+
+            const data = isObject(record.content.data) ? record.content.data : null
+            if (!data) continue
+
+            if (record.content.type === 'output' && data.type === 'summary') {
+                summaryCount += 1
+                if (summaryCount > 1 && typeof data.leafUuid === 'string') {
+                    activeSummaryIds.push(data.leafUuid)
+                }
+                continue
+            }
+
+            if (record.content.type === 'codex' && data.type === 'message' && typeof data.message === 'string') {
+                pendingMessageRecords = [buildAssistantTextRecord(data.message)]
+                continue
+            }
+
+            if (record.content.type !== 'event' || data.type !== 'ready') continue
+
+            const summaryId = activeSummaryIds.pop()
+            if (!summaryId) {
+                pendingMessageRecords = []
+                continue
+            }
+            if (pendingMessageRecords.length > 0) {
+                summaryOutputs.set(summaryId, pendingMessageRecords)
+                pendingMessageRecords = []
+            }
+        }
+
+        if (pendingMessageRecords.length > 0 && activeSummaryIds.length > 0) {
+            summaryOutputs.set(activeSummaryIds[activeSummaryIds.length - 1], pendingMessageRecords)
+        }
+
+        return summaryOutputs.get(leafUuid) ?? []
+    }
+
+    const records: unknown[] = []
+    for (const messageContent of messageContents) {
+        const record = unwrapRoleWrappedRecordEnvelope(messageContent)
+        if (!record) continue
+        if (record.role !== 'agent') continue
+        if (!isObject(record.content)) continue
+
+        const data = isObject(record.content.data) ? record.content.data : null
+        if (!data) continue
+
+        if (record.content.type !== 'codex') continue
+
+        if (data.type !== 'tool-call-result' || typeof data.callId !== 'string') continue
+        if (callId && data.callId !== callId) continue
+
+        const output = isObject(data.output) ? data.output : null
+        const text = typeof output?.output === 'string' ? output.output : ''
+        if (text.length === 0) continue
+
+        records.push({
+            type: 'assistant',
+            message: {
+                role: 'assistant',
+                content: [{ type: 'text', text }],
+            },
+        })
+    }
+
+    return records
+}
+
+function buildAssistantTextRecord(text: string): unknown {
+    return {
+        type: 'assistant',
+        message: {
+            role: 'assistant',
+            content: [{ type: 'text', text }],
+        },
+    }
+}
+
 /**
  * Pending tool_use that may become a background task once its tool_result arrives.
  */
@@ -28,6 +147,11 @@ type PendingToolUse = {
     description?: string
     prompt?: string
     subagentType?: string
+    command?: string
+}
+
+type PendingCodexToolCall = {
+    callId: string
     command?: string
 }
 
@@ -43,7 +167,14 @@ type PendingToolUse = {
 export class BackgroundTaskTracker {
     /** Pending tool_uses from assistant messages, keyed by tool_use_id */
     private pending = new Map<string, PendingToolUse>()
+    private pendingCodexToolCalls = new Map<string, PendingCodexToolCall>()
+    private activeCodexBackgroundCalls = new Map<string, PendingCodexToolCall>()
     private codexSummaryCountInTurn = 0
+    private readonly flavor: BackgroundTaskTrackerFlavor
+
+    constructor(flavor?: string | null) {
+        this.flavor = normalizeBackgroundTaskTrackerFlavor(flavor)
+    }
 
     /**
      * Process a message and return any background task events.
@@ -57,6 +188,24 @@ export class BackgroundTaskTracker {
             const data = isObject(record.content.data) ? record.content.data : null
             if (data?.type === 'ready') {
                 this.codexSummaryCountInTurn = 0
+                if (this.flavor === 'codex') {
+                    return this.promoteCodexToolCalls()
+                }
+            }
+            return null
+        }
+
+        if (this.flavor === 'codex') {
+            if (record.content.type === 'output') {
+                const data = isObject(record.content.data) ? record.content.data : null
+                const codexSummaryTask = data ? this.matchCodexSummary(data) : null
+                if (codexSummaryTask) {
+                    return { started: [codexSummaryTask], completed: [] }
+                }
+            }
+            if (record.content.type === 'codex') {
+                const data = isObject(record.content.data) ? record.content.data : null
+                return data ? this.processCodexRecord(data) : null
             }
             return null
         }
@@ -65,11 +214,6 @@ export class BackgroundTaskTracker {
 
         const data = isObject(record.content.data) ? record.content.data : null
         if (!data) return null
-
-        const codexSummaryTask = this.matchCodexSummary(data)
-        if (codexSummaryTask) {
-            return { started: [codexSummaryTask], completed: [] }
-        }
 
         // Phase 1: Extract pending tool_uses from assistant messages
         if (data.type === 'assistant') {
@@ -84,6 +228,58 @@ export class BackgroundTaskTracker {
 
         if (starts.length === 0 && completions.length === 0) return null
         return { started: starts, completed: completions }
+    }
+
+    private processCodexRecord(data: Record<string, unknown>): BackgroundTaskEvent | null {
+        if (data.type === 'tool-call' && data.name === 'CodexBash' && typeof data.callId === 'string') {
+            const input = isObject(data.input) ? data.input : null
+            const command = typeof input?.command === 'string' ? input.command : undefined
+            this.pendingCodexToolCalls.set(data.callId, { callId: data.callId, command })
+            return null
+        }
+
+        if (data.type === 'tool-call-result' && typeof data.callId === 'string') {
+            this.pendingCodexToolCalls.delete(data.callId)
+            if (!this.activeCodexBackgroundCalls.has(data.callId)) return null
+
+            this.activeCodexBackgroundCalls.delete(data.callId)
+            const output = isObject(data.output) ? data.output : null
+            return {
+                started: [],
+                completed: [{
+                    taskId: data.callId,
+                    toolUseId: data.callId,
+                    summary: summarizeCodexOutput(output),
+                    exitStatus: typeof output?.status === 'string' ? output.status : undefined,
+                    outputFile: buildCodexInlineOutputRef(data.callId),
+                }],
+            }
+        }
+
+        return null
+    }
+
+    private promoteCodexToolCalls(): BackgroundTaskEvent | null {
+        if (this.pendingCodexToolCalls.size === 0) return null
+
+        const now = Date.now()
+        const started: BackgroundTask[] = []
+        for (const task of this.pendingCodexToolCalls.values()) {
+            this.activeCodexBackgroundCalls.set(task.callId, task)
+            started.push({
+                id: task.callId,
+                toolUseId: task.callId,
+                type: 'shell',
+                command: task.command,
+                description: task.command,
+                status: 'running',
+                startedAt: now,
+                outputFile: buildCodexInlineOutputRef(task.callId),
+            })
+        }
+        this.pendingCodexToolCalls.clear()
+
+        return { started, completed: [] }
     }
 
     private matchCodexSummary(data: Record<string, unknown>): BackgroundTask | null {
@@ -105,6 +301,7 @@ export class BackgroundTaskTracker {
             status: 'completed',
             startedAt: now,
             completedAt: now,
+            outputFile: buildCodexSummaryOutputRef(leafUuid),
         }
     }
 
@@ -359,6 +556,15 @@ function extractOutputFile(text: string): string | undefined {
     return text.match(/output_file:\s*(\S+)/)?.[1]
 }
 
+function summarizeCodexOutput(output: Record<string, unknown> | null): string | undefined {
+    const text = typeof output?.output === 'string' ? output.output : ''
+    const firstLine = text
+        .split(/\r?\n/)
+        .map(line => line.trim())
+        .find(Boolean)
+    return firstLine ? firstLine.slice(0, 200) : undefined
+}
+
 // --- Legacy compatibility ---
 
 /**
@@ -367,10 +573,14 @@ function extractOutputFile(text: string): string | undefined {
 export function extractBackgroundTaskDelta(messageContent: unknown): { started: number; completed: number } | null {
     const record = unwrapRoleWrappedRecordEnvelope(messageContent)
     if (!record || record.role !== 'agent') return null
-    if (!isObject(record.content) || record.content.type !== 'output') return null
+    if (!isObject(record.content)) return null
 
     const data = isObject(record.content.data) ? record.content.data : null
     if (!data) return null
+
+    if (record.content.type === 'codex') return null
+
+    if (record.content.type !== 'output') return null
 
     const started = countTaskStarts(record.content)
     const completed = data.type === 'system' ? countSystemTaskCompletions(data)

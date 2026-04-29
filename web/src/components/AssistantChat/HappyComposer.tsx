@@ -1037,6 +1037,8 @@ export function HappyComposer(props: {
                         <BackgroundDetailWindow
                             tasks={backgroundShellTasks}
                             panelType="shells"
+                            readOutput={props.readBackgroundTaskOutput}
+                            chatContext={props.chatContext}
                             onKillTask={(id) => { /* TODO: wire to RPC */ console.log('kill shell', id) }}
                         />
                     ) : null}

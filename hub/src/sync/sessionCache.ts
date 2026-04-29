@@ -4,13 +4,26 @@ import type { Store } from '../store'
 import { clampAliveTime } from './aliveTime'
 import { EventPublisher } from './eventPublisher'
 import { extractTodoWriteTodosFromMessageContent, TodosSchema } from './todos'
-import { extractBackgroundTaskDelta, BackgroundTaskTracker, type BackgroundTaskEvent, type BackgroundTask } from './backgroundTasks'
+import {
+    extractBackgroundTaskDelta,
+    extractCodexInlineOutputRecords,
+    normalizeBackgroundTaskTrackerFlavor,
+    BackgroundTaskTracker,
+    type BackgroundTaskEvent,
+    type BackgroundTask,
+    type BackgroundTaskTrackerFlavor
+} from './backgroundTasks'
+
+type TaskTrackerEntry = {
+    flavor: BackgroundTaskTrackerFlavor
+    tracker: BackgroundTaskTracker
+}
 
 export class SessionCache {
     private readonly sessions: Map<string, Session> = new Map()
     private readonly lastBroadcastAtBySessionId: Map<string, number> = new Map()
     private readonly todoBackfillAttemptedSessionIds: Set<string> = new Set()
-    private readonly taskTrackers: Map<string, BackgroundTaskTracker> = new Map()
+    private readonly taskTrackers: Map<string, TaskTrackerEntry> = new Map()
 
     constructor(
         private readonly store: Store,
@@ -120,9 +133,8 @@ export class SessionCache {
             return parsed.success ? parsed.data : undefined
         })()
 
-        const backgroundTasks = existing?.backgroundTasks?.length
-            ? existing.backgroundTasks
-            : this.recoverBackgroundTasks(sessionId)
+        const recoveredBackgroundTasks = this.recoverBackgroundTasks(sessionId, metadata?.flavor)
+        const backgroundTasks = mergeBackgroundTasks(existing?.backgroundTasks, recoveredBackgroundTasks)
 
         const session: Session = {
             id: stored.id,
@@ -154,8 +166,8 @@ export class SessionCache {
         return session
     }
 
-    private recoverBackgroundTasks(sessionId: string): BackgroundTask[] {
-        const tracker = new BackgroundTaskTracker()
+    private recoverBackgroundTasks(sessionId: string, flavor?: string | null): BackgroundTask[] {
+        const tracker = new BackgroundTaskTracker(flavor)
         const tasks: BackgroundTask[] = []
 
         for (const message of this.store.messages.getMessages(sessionId, 200)) {
@@ -281,13 +293,22 @@ export class SessionCache {
         })
     }
 
-    getOrCreateTaskTracker(sessionId: string): BackgroundTaskTracker {
-        let tracker = this.taskTrackers.get(sessionId)
-        if (!tracker) {
-            tracker = new BackgroundTaskTracker()
-            this.taskTrackers.set(sessionId, tracker)
+    getOrCreateTaskTracker(sessionId: string, flavor?: string | null): BackgroundTaskTracker {
+        const normalizedFlavor = normalizeBackgroundTaskTrackerFlavor(flavor)
+        let entry = this.taskTrackers.get(sessionId)
+        if (!entry || entry.flavor !== normalizedFlavor) {
+            entry = {
+                flavor: normalizedFlavor,
+                tracker: new BackgroundTaskTracker(normalizedFlavor),
+            }
+            this.taskTrackers.set(sessionId, entry)
         }
-        return tracker
+        return entry.tracker
+    }
+
+    readInlineBackgroundTaskOutput(sessionId: string, ref: string): unknown[] | null {
+        const messages = this.store.messages.getMessages(sessionId, 200).map(message => message.content)
+        return extractCodexInlineOutputRecords(messages, ref)
     }
 
     processBackgroundTaskEvent(sessionId: string, event: BackgroundTaskEvent): void {
@@ -624,4 +645,27 @@ function applyBackgroundTaskEvent(tasks: BackgroundTask[], event: BackgroundTask
     }
 
     return changed
+}
+
+function mergeBackgroundTasks(existing: BackgroundTask[] | undefined, recovered: BackgroundTask[]): BackgroundTask[] {
+    if (!existing || existing.length === 0) return recovered
+
+    const byId = new Map<string, BackgroundTask>()
+    for (const task of recovered) {
+        byId.set(task.id, task)
+    }
+
+    for (const task of existing) {
+        const recoveredTask = byId.get(task.id)
+        byId.set(task.id, recoveredTask
+            ? {
+                ...recoveredTask,
+                ...task,
+                summary: task.summary ?? recoveredTask.summary,
+                outputFile: task.outputFile ?? recoveredTask.outputFile,
+            }
+            : task)
+    }
+
+    return [...byId.values()]
 }

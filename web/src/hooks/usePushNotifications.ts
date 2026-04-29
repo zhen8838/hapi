@@ -1,11 +1,19 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ApiClient } from '@/api/client'
 
-function isPushSupported(): boolean {
+function isNotificationSupported(): boolean {
     return typeof window !== 'undefined'
+        && 'Notification' in window
+}
+
+function isPushSubscriptionSupported(): boolean {
+    return isNotificationSupported()
         && 'serviceWorker' in navigator
         && 'PushManager' in window
-        && 'Notification' in window
+}
+
+function notifyPushStateChanged() {
+    window.dispatchEvent(new Event('hapi-push-notifications-changed'))
 }
 
 function base64UrlToUint8Array(base64Url: string): Uint8Array {
@@ -23,21 +31,29 @@ function base64UrlToUint8Array(base64Url: string): Uint8Array {
 
 export function usePushNotifications(api: ApiClient | null) {
     const [isSupported, setIsSupported] = useState(false)
+    const [supportsPushSubscription, setSupportsPushSubscription] = useState(false)
     const [permission, setPermission] = useState<NotificationPermission>('default')
     const [isSubscribed, setIsSubscribed] = useState(false)
 
     const refreshSubscription = useCallback(async () => {
-        if (!isPushSupported()) {
+        if (!isNotificationSupported()) {
             setIsSupported(false)
+            setSupportsPushSubscription(false)
             setIsSubscribed(false)
             return
         }
 
         setIsSupported(true)
+        setSupportsPushSubscription(isPushSubscriptionSupported())
         setPermission(Notification.permission)
 
         if (Notification.permission !== 'granted') {
             setIsSubscribed(false)
+            return
+        }
+
+        if (!isPushSubscriptionSupported()) {
+            setIsSubscribed(true)
             return
         }
 
@@ -47,11 +63,16 @@ export function usePushNotifications(api: ApiClient | null) {
     }, [])
 
     useEffect(() => {
+        window.addEventListener('hapi-push-notifications-changed', refreshSubscription)
+        return () => window.removeEventListener('hapi-push-notifications-changed', refreshSubscription)
+    }, [refreshSubscription])
+
+    useEffect(() => {
         void refreshSubscription()
     }, [refreshSubscription])
 
     const requestPermission = useCallback(async (): Promise<boolean> => {
-        if (!isPushSupported()) {
+        if (!isNotificationSupported()) {
             return false
         }
 
@@ -64,12 +85,22 @@ export function usePushNotifications(api: ApiClient | null) {
     }, [])
 
     const subscribe = useCallback(async (): Promise<boolean> => {
-        if (!api || !isPushSupported()) {
+        if (!isNotificationSupported()) {
             return false
         }
 
         if (Notification.permission !== 'granted') {
             setPermission(Notification.permission)
+            return false
+        }
+
+        if (!isPushSubscriptionSupported()) {
+            setIsSubscribed(true)
+            notifyPushStateChanged()
+            return true
+        }
+
+        if (!api) {
             return false
         }
 
@@ -97,6 +128,7 @@ export function usePushNotifications(api: ApiClient | null) {
                 }
             })
             setIsSubscribed(true)
+            notifyPushStateChanged()
             return true
         } catch (error) {
             console.error('[PushNotifications] Failed to subscribe:', error)
@@ -105,7 +137,7 @@ export function usePushNotifications(api: ApiClient | null) {
     }, [api])
 
     const unsubscribe = useCallback(async (): Promise<boolean> => {
-        if (!api || !isPushSupported()) {
+        if (!api || !isPushSubscriptionSupported()) {
             return false
         }
 
@@ -121,6 +153,7 @@ export function usePushNotifications(api: ApiClient | null) {
             const success = await subscription.unsubscribe()
             await api.unsubscribePushNotifications({ endpoint })
             setIsSubscribed(false)
+            notifyPushStateChanged()
             return success
         } catch (error) {
             console.error('[PushNotifications] Failed to unsubscribe:', error)
@@ -130,6 +163,7 @@ export function usePushNotifications(api: ApiClient | null) {
 
     return {
         isSupported,
+        supportsPushSubscription,
         permission,
         isSubscribed,
         requestPermission,

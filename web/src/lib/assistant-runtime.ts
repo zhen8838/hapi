@@ -6,6 +6,7 @@ import { renderEventLabel } from '@/chat/presentation'
 import type { ChatBlock, CliOutputBlock } from '@/chat/types'
 import type { AgentEvent, ToolCallBlock } from '@/chat/types'
 import type { AttachmentMetadata, MessageStatus as HappyMessageStatus, Session } from '@/types/api'
+import { getMainAgentState, isMainAgentTurnInFlight } from '@/lib/session-state'
 
 export type HappyChatMessageMetadata = {
     kind: 'user' | 'assistant' | 'tool' | 'event' | 'cli-output'
@@ -177,7 +178,7 @@ export function useHappyRuntime(props: {
     attachmentAdapter?: AttachmentAdapter
     allowSendWhenInactive?: boolean
 }) {
-    const isMainTurnRunning = props.session.thinking
+    const isMainTurnRunning = isMainAgentTurnInFlight(getMainAgentState(props.session))
 
     // Use cached message converter for performance optimization
     // This prevents re-converting all messages on every render

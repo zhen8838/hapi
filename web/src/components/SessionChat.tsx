@@ -31,6 +31,7 @@ import { useVoiceOptional } from '@/lib/voice-context'
 import { RealtimeVoiceSession, registerSessionStore, registerVoiceHooksStore, voiceHooks } from '@/realtime'
 import { isRemoteTerminalSupported } from '@/utils/terminalSupport'
 import { saveDraft, loadDraft, clearDraft } from '@/lib/draftStore'
+import { getMainAgentState, getMainAgentStateEvents } from '@/lib/session-state'
 
 export function SessionChat(props: {
     api: ApiClient
@@ -60,7 +61,7 @@ export function SessionChat(props: {
     const navigate = useNavigate()
     const sessionInactive = !props.session.active
     const terminalSupported = isRemoteTerminalSupported(props.session.metadata)
-    const mainTurnRunning = props.session.thinking
+    const mainAgentState = getMainAgentState(props.session)
     const normalizedCacheRef = useRef<Map<string, { source: DecryptedMessage; normalized: NormalizedMessage | null }>>(new Map())
     const blocksByIdRef = useRef<Map<string, ChatBlock>>(new Map())
     const [forceScrollToken, setForceScrollToken] = useState(0)
@@ -130,18 +131,18 @@ export function SessionChat(props: {
         prevMessagesRef.current = props.messages
     }, [props.messages, props.session.id])
 
-    // Report ready event when thinking stops
+    // Report ready event when the main agent returns to idle
     // Note: voiceHooks internally checks isVoiceSessionStarted() so we don't need to check voice.status here
-    const prevThinkingRef = useRef(props.session.thinking)
+    const prevMainAgentStateRef = useRef(mainAgentState)
 
     useEffect(() => {
-        // Detect transition: thinking → not thinking
-        if (prevThinkingRef.current && !props.session.thinking) {
+        const events = getMainAgentStateEvents(prevMainAgentStateRef.current, mainAgentState)
+        if (events.includes('readyForInput')) {
             voiceHooks.onReady(props.session.id)
         }
 
-        prevThinkingRef.current = props.session.thinking
-    }, [props.session.thinking, props.session.id])
+        prevMainAgentStateRef.current = mainAgentState
+    }, [mainAgentState, props.session.id])
 
     // Report permission requests to voice assistant
     // Note: voiceHooks internally checks isVoiceSessionStarted() so we don't need to check voice.status here
@@ -438,8 +439,7 @@ export function SessionChat(props: {
                         agentFlavor={agentFlavor}
                         active={props.session.active}
                         allowSendWhenInactive
-                        thinking={mainTurnRunning}
-                        agentState={props.session.agentState}
+                        mainAgentState={mainAgentState}
                         backgroundTaskCount={props.session.backgroundTaskCount}
                         backgroundTasks={backgroundTasks}
                         readBackgroundTaskOutput={readBackgroundTaskOutput}

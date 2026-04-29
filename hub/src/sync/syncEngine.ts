@@ -7,6 +7,7 @@
  * - No E2E encryption; data is stored as JSON in SQLite
  */
 
+import { isObject } from '@hapi/protocol'
 import type { CodexCollaborationMode, DecryptedMessage, PermissionMode, Session, SyncEvent } from '@hapi/protocol/types'
 import type { Server } from 'socket.io'
 import type { Store } from '../store'
@@ -49,6 +50,26 @@ export type ResumeSessionResult =
 export type ForkSessionResult =
     | { type: 'success'; sessionId: string }
     | { type: 'error'; message: string; code: 'session_not_found' | 'access_denied' | 'no_machine_online' | 'resume_unavailable' | 'resume_failed' | 'unsupported_agent' | 'session_active' }
+
+function getMessageEventType(event: SyncEvent): string | null {
+    if (event.type !== 'message-received') {
+        return null
+    }
+
+    const message = event.message?.content
+    if (!isObject(message)) {
+        return null
+    }
+
+    const envelope = message.type === 'event'
+        ? message
+        : isObject(message.content) && message.content.type === 'event'
+            ? message.content
+            : null
+    const data = isObject(envelope?.data) ? envelope.data : null
+    const eventType = data?.type
+    return typeof eventType === 'string' ? eventType : null
+}
 
 export class SyncEngine {
     private readonly eventPublisher: EventPublisher
@@ -183,6 +204,13 @@ export class SyncEngine {
         if (event.type === 'message-received' && event.sessionId) {
             if (!this.getSession(event.sessionId)) {
                 this.sessionCache.refreshSession(event.sessionId)
+            }
+            if (getMessageEventType(event) === 'ready') {
+                this.sessionCache.handleSessionAlive({
+                    sid: event.sessionId,
+                    time: Date.now(),
+                    thinking: false
+                })
             }
         }
 

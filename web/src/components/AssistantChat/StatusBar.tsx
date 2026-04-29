@@ -6,12 +6,13 @@ import {
 } from '@hapi/protocol'
 import type { PermissionModeTone } from '@hapi/protocol'
 import { useMemo } from 'react'
-import type { AgentState, CodexCollaborationMode, PermissionMode } from '@/types/api'
+import type { CodexCollaborationMode, PermissionMode } from '@/types/api'
 import type { ConversationStatus } from '@/realtime/types'
 import { getContextBudgetTokens } from '@/chat/modelConfig'
 import { useTranslation } from '@/lib/use-translation'
+import type { MainAgentState } from '@/lib/session-state'
 
-// Vibing messages for thinking state
+// Processing labels rotate so the status feels alive without changing state semantics.
 const VIBING_MESSAGES = [
     "Accomplishing", "Actioning", "Actualizing", "Baking", "Booping", "Brewing",
     "Calculating", "Cerebrating", "Channelling", "Churning", "Clauding", "Coalescing",
@@ -38,15 +39,10 @@ const PERMISSION_TONE_CLASSES: Record<PermissionModeTone, string> = {
 }
 
 function getConnectionStatus(
-    active: boolean,
-    thinking: boolean,
-    agentState: AgentState | null | undefined,
+    mainAgentState: MainAgentState,
     voiceStatus: ConversationStatus | undefined,
-    backgroundTaskCount: number,
     t: (key: string) => string
 ): { text: string; color: string; dotColor: string; isPulsing: boolean } {
-    const hasPermissions = agentState?.requests && Object.keys(agentState.requests).length > 0
-
     // Voice connecting takes priority
     if (voiceStatus === 'connecting') {
         return {
@@ -57,7 +53,7 @@ function getConnectionStatus(
         }
     }
 
-    if (!active) {
+    if (mainAgentState === 'offline') {
         return {
             text: t('misc.offline'),
             color: 'text-[#999]',
@@ -66,7 +62,7 @@ function getConnectionStatus(
         }
     }
 
-    if (hasPermissions) {
+    if (mainAgentState === 'waitingPermission') {
         return {
             text: t('misc.permissionRequired'),
             color: 'text-[#FF9500]',
@@ -75,19 +71,10 @@ function getConnectionStatus(
         }
     }
 
-    if (thinking) {
+    if (mainAgentState === 'processing') {
         const vibingMessage = VIBING_MESSAGES[Math.floor(Math.random() * VIBING_MESSAGES.length)].toLowerCase() + '…'
         return {
             text: vibingMessage,
-            color: 'text-[#007AFF]',
-            dotColor: 'bg-[#007AFF]',
-            isPulsing: true
-        }
-    }
-
-    if (backgroundTaskCount > 0) {
-        return {
-            text: `${backgroundTaskCount} background task${backgroundTaskCount > 1 ? 's' : ''} running`,
             color: 'text-[#007AFF]',
             dotColor: 'bg-[#007AFF]',
             isPulsing: true
@@ -117,10 +104,7 @@ function getContextWarning(contextSize: number, maxContextSize: number, t: (key:
 }
 
 export function StatusBar(props: {
-    active: boolean
-    thinking: boolean
-    agentState: AgentState | null | undefined
-    backgroundTaskCount?: number
+    mainAgentState: MainAgentState
     contextSize?: number
     model?: string | null
     permissionMode?: PermissionMode
@@ -130,8 +114,8 @@ export function StatusBar(props: {
 }) {
     const { t } = useTranslation()
     const connectionStatus = useMemo(
-        () => getConnectionStatus(props.active, props.thinking, props.agentState, props.voiceStatus, props.backgroundTaskCount ?? 0, t),
-        [props.active, props.thinking, props.agentState, props.voiceStatus, props.backgroundTaskCount, t]
+        () => getConnectionStatus(props.mainAgentState, props.voiceStatus, t),
+        [props.mainAgentState, props.voiceStatus, t]
     )
 
     const contextWarning = useMemo(

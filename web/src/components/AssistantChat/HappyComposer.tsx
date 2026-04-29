@@ -13,7 +13,7 @@ import {
     useRef,
     useState
 } from 'react'
-import type { AgentState, CodexCollaborationMode, PermissionMode, Session } from '@/types/api'
+import type { CodexCollaborationMode, PermissionMode, Session } from '@/types/api'
 import type { Suggestion } from '@/hooks/useActiveSuggestions'
 import type { ConversationStatus } from '@/realtime/types'
 import { useActiveWord } from '@/hooks/useActiveWord'
@@ -36,6 +36,7 @@ import { AttachmentItem } from '@/components/AssistantChat/AttachmentItem'
 import { useTranslation } from '@/lib/use-translation'
 import type { AttachmentMetadata } from '@/types/api'
 import { makeClientSideId } from '@/lib/messages'
+import { isMainAgentTurnInFlight, type MainAgentState } from '@/lib/session-state'
 import { getModelOptionsForFlavor, getNextModelForFlavor } from './modelOptions'
 import { getClaudeComposerEffortOptions } from './claudeEffortOptions'
 import { getCodexComposerReasoningEffortOptions } from './codexReasoningEffortOptions'
@@ -77,8 +78,7 @@ export function HappyComposer(props: {
     effort?: string | null
     active?: boolean
     allowSendWhenInactive?: boolean
-    thinking?: boolean
-    agentState?: AgentState | null
+    mainAgentState: MainAgentState
     backgroundTaskCount?: number
     backgroundTasks?: Session['backgroundTasks']
     readBackgroundTaskOutput?: (taskId: string) => Promise<unknown[]>
@@ -116,8 +116,7 @@ export function HappyComposer(props: {
         effort: rawEffort,
         active = true,
         allowSendWhenInactive = false,
-        thinking = false,
-        agentState,
+        mainAgentState,
         backgroundTaskCount,
         contextSize,
         controlledByUser = false,
@@ -202,7 +201,7 @@ export function HappyComposer(props: {
         const path = (attachment as { path?: string }).path
         return typeof path === 'string' && path.length > 0
     })
-    const mainTurnRunning = Boolean(thinking)
+    const mainTurnRunning = isMainAgentTurnInFlight(mainAgentState)
     const hasRunningBackgroundTasks = (backgroundTaskCount ?? 0) > 0
     const canAbortRun = mainTurnRunning || hasRunningBackgroundTasks
     const canSend = (hasText || hasAttachments) && attachmentsReady && !controlsDisabled && !mainTurnRunning
@@ -923,10 +922,7 @@ export function HappyComposer(props: {
                     {overlays}
 
                     <StatusBar
-                        active={active}
-                        thinking={thinking}
-                        agentState={agentState}
-                        backgroundTaskCount={backgroundTaskCount}
+                        mainAgentState={mainAgentState}
                         contextSize={contextSize}
                         model={model}
                         permissionMode={permissionMode}

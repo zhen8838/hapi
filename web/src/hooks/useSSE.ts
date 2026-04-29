@@ -30,8 +30,6 @@ const RECONNECT_MAX_DELAY_MS = 30_000
 const RECONNECT_JITTER_MS = 500
 const INVALIDATION_BATCH_MS = 16
 
-type SessionPatch = Partial<Pick<Session, 'active' | 'thinking' | 'activeAt' | 'updatedAt' | 'model' | 'modelReasoningEffort' | 'effort' | 'permissionMode' | 'collaborationMode' | 'backgroundTaskCount' | 'backgroundTasks'>>
-
 function sortSessionSummaries(left: SessionSummary, right: SessionSummary): number {
     if (left.active !== right.active) {
         return left.active ? -1 : 1
@@ -53,72 +51,26 @@ function isSessionRecord(value: unknown): value is Session {
     return typeof value.id === 'string'
         && typeof value.active === 'boolean'
         && typeof value.activeAt === 'number'
-        && typeof value.updatedAt === 'number'
-        && typeof value.thinking === 'boolean'
 }
 
-function getSessionPatch(value: unknown): SessionPatch | null {
-    if (!hasRecordShape(value)) {
+function getMessageEventType(event: SyncEvent): string | null {
+    if (event.type !== 'message-received') {
         return null
     }
 
-    const patch: SessionPatch = {}
-    let hasKnownPatch = false
-
-    if (typeof value.active === 'boolean') {
-        patch.active = value.active
-        hasKnownPatch = true
-    }
-    if (typeof value.thinking === 'boolean') {
-        patch.thinking = value.thinking
-        hasKnownPatch = true
-    }
-    if (typeof value.activeAt === 'number') {
-        patch.activeAt = value.activeAt
-        hasKnownPatch = true
-    }
-    if (typeof value.updatedAt === 'number') {
-        patch.updatedAt = value.updatedAt
-        hasKnownPatch = true
-    }
-    if (value.model === null || typeof value.model === 'string') {
-        patch.model = value.model
-        hasKnownPatch = true
-    }
-    if (value.modelReasoningEffort === null || typeof value.modelReasoningEffort === 'string') {
-        patch.modelReasoningEffort = value.modelReasoningEffort
-        hasKnownPatch = true
-    }
-    if (value.effort === null || typeof value.effort === 'string') {
-        patch.effort = value.effort
-        hasKnownPatch = true
-    }
-    if (typeof value.permissionMode === 'string') {
-        patch.permissionMode = value.permissionMode as Session['permissionMode']
-        hasKnownPatch = true
-    }
-    if (typeof value.collaborationMode === 'string') {
-        patch.collaborationMode = value.collaborationMode as Session['collaborationMode']
-        hasKnownPatch = true
-    }
-    if (typeof value.backgroundTaskCount === 'number') {
-        patch.backgroundTaskCount = value.backgroundTaskCount
-        hasKnownPatch = true
-    }
-    if (Array.isArray(value.backgroundTasks)) {
-        patch.backgroundTasks = value.backgroundTasks as Session['backgroundTasks']
-        hasKnownPatch = true
+    const message = event.message?.content
+    if (!hasRecordShape(message)) {
+        return null
     }
 
-    return hasKnownPatch ? patch : null
-}
-
-function hasUnknownSessionPatchKeys(value: unknown): boolean {
-    if (!hasRecordShape(value)) {
-        return false
-    }
-    const knownKeys = new Set(['active', 'thinking', 'activeAt', 'updatedAt', 'model', 'modelReasoningEffort', 'effort', 'permissionMode', 'collaborationMode', 'backgroundTaskCount', 'backgroundTasks'])
-    return Object.keys(value).some((key) => !knownKeys.has(key))
+    const envelope = message.type === 'event'
+        ? message
+        : hasRecordShape(message.content) && message.content.type === 'event'
+            ? message.content
+            : null
+    const data = hasRecordShape(envelope?.data) ? envelope.data : null
+    const eventType = data?.type
+    return typeof eventType === 'string' ? eventType : null
 }
 
 function isMachineMetadata(value: unknown): value is Machine['metadata'] {
@@ -378,60 +330,6 @@ export function useSSE(options: {
             })
         }
 
-        const patchSessionSummary = (sessionId: string, patch: SessionPatch): boolean => {
-            let patched = false
-            queryClient.setQueryData<SessionsResponse | undefined>(queryKeys.sessions, (previous) => {
-                if (!previous) {
-                    return previous
-                }
-
-                const nextSessions = previous.sessions.slice()
-                const index = nextSessions.findIndex((item) => item.id === sessionId)
-                if (index < 0) {
-                    return previous
-                }
-
-                const current = nextSessions[index]
-                if (!current) {
-                    return previous
-                }
-
-                const nextSummary: SessionSummary = {
-                    ...current,
-                    active: patch.active ?? current.active,
-                    thinking: patch.thinking ?? current.thinking,
-                    activeAt: patch.activeAt ?? current.activeAt,
-                    updatedAt: patch.updatedAt ?? current.updatedAt,
-                    model: Object.prototype.hasOwnProperty.call(patch, 'model') ? patch.model ?? null : current.model,
-                    effort: Object.prototype.hasOwnProperty.call(patch, 'effort') ? patch.effort ?? null : current.effort
-                }
-
-                patched = true
-                nextSessions[index] = nextSummary
-                nextSessions.sort(sortSessionSummaries)
-                return { ...previous, sessions: nextSessions }
-            })
-            return patched
-        }
-
-        const patchSessionDetail = (sessionId: string, patch: SessionPatch): boolean => {
-            let patched = false
-            queryClient.setQueryData<SessionResponse | undefined>(queryKeys.session(sessionId), (previous) => {
-                if (!previous?.session) {
-                    return previous
-                }
-                patched = true
-                return {
-                    ...previous,
-                    session: {
-                        ...previous.session,
-                        ...patch
-                    }
-                }
-            })
-            return patched
-        }
-
         const removeSessionSummary = (sessionId: string) => {
             queryClient.setQueryData<SessionsResponse | undefined>(queryKeys.sessions, (previous) => {
                 if (!previous) {
@@ -507,6 +405,10 @@ export function useSSE(options: {
 
             if (event.type === 'message-received') {
                 ingestIncomingMessages(event.sessionId, [event.message])
+                if (getMessageEventType(event) === 'ready') {
+                    queueSessionDetailInvalidation(event.sessionId)
+                    queueSessionListInvalidation()
+                }
             }
 
             if (event.type === 'session-added' || event.type === 'session-updated' || event.type === 'session-removed') {
@@ -518,25 +420,8 @@ export function useSSE(options: {
                     queryClient.setQueryData<SessionResponse>(queryKeys.session(event.sessionId), { session: event.data })
                     upsertSessionSummary(event.data)
                 } else {
-                    const patch = getSessionPatch(event.data)
-                    if (patch) {
-                        const detailPatched = patchSessionDetail(event.sessionId, patch)
-                        const summaryPatched = patchSessionSummary(event.sessionId, patch)
-
-                        if (!detailPatched) {
-                            queueSessionDetailInvalidation(event.sessionId)
-                        }
-                        if (!summaryPatched) {
-                            queueSessionListInvalidation()
-                        }
-                        if (hasUnknownSessionPatchKeys(event.data)) {
-                            queueSessionDetailInvalidation(event.sessionId)
-                            queueSessionListInvalidation()
-                        }
-                    } else {
-                        queueSessionDetailInvalidation(event.sessionId)
-                        queueSessionListInvalidation()
-                    }
+                    queueSessionDetailInvalidation(event.sessionId)
+                    queueSessionListInvalidation()
                 }
             }
 

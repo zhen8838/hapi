@@ -42,6 +42,18 @@ export function PlusCircleIcon(props: IconProps) {
     )
 }
 
+// Path data adapted from lucide.dev `bell` glyph.
+export function BellIcon(props: IconProps) {
+    return createIcon(
+        <>
+            <path d="M10.27 21a2 2 0 0 0 3.46 0" />
+            <path d="M3.26 15.33A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.67C19.3 13.71 18 12.5 18 8a6 6 0 0 0-12 0c0 4.5-1.3 5.71-2.74 7.33Z" />
+        </>,
+        props,
+        2
+    )
+}
+
 export function CopyIcon(props: IconProps) {
     return createIcon(
         <>

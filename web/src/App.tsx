@@ -26,12 +26,46 @@ import { ReconnectingBanner } from '@/components/ReconnectingBanner'
 import { VoiceErrorBanner } from '@/components/VoiceErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
 import { ToastContainer } from '@/components/ToastContainer'
+import { NotificationPrompt } from '@/components/NotificationPrompt'
 import { ToastProvider, useToast } from '@/lib/toast-context'
 import type { SyncEvent } from '@/types/api'
 
 type ToastEvent = Extract<SyncEvent, { type: 'toast' }>
 
 const REQUIRE_SERVER_URL = requireHubUrlForLogin()
+
+function isSafariBrowser(): boolean {
+    if (typeof navigator === 'undefined') {
+        return false
+    }
+
+    const ua = navigator.userAgent
+    return /Safari/.test(ua) && !/(Chrome|Chromium|CriOS|FxiOS|Edg|OPR|Android)/.test(ua)
+}
+
+function hasRecordShape(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function getMessageEventType(event: SyncEvent): string | null {
+    if (event.type !== 'message-received') {
+        return null
+    }
+
+    const message = event.message?.content
+    if (!hasRecordShape(message)) {
+        return null
+    }
+
+    const envelope = message.type === 'event'
+        ? message
+        : hasRecordShape(message.content) && message.content.type === 'event'
+            ? message.content
+            : null
+    const data = hasRecordShape(envelope?.data) ? envelope.data : null
+    const eventType = data?.type
+    return typeof eventType === 'string' ? eventType : null
+}
 
 export function App() {
     return (
@@ -126,7 +160,16 @@ function AppInner() {
     const isFirstConnectRef = useRef(true)
     const baseUrlRef = useRef(baseUrl)
     const pushPromptedRef = useRef(false)
-    const { isSupported: isPushSupported, permission: pushPermission, requestPermission, subscribe } = usePushNotifications(api)
+    const readyNotificationTimesRef = useRef(new Map<string, number>())
+    const isSafari = useMemo(() => isSafariBrowser(), [])
+    const {
+        isSupported: isPushSupported,
+        supportsPushSubscription,
+        permission: pushPermission,
+        isSubscribed: isPushSubscribed,
+        requestPermission,
+        subscribe
+    } = usePushNotifications(api)
 
     useEffect(() => {
         if (baseUrlRef.current === baseUrl) {
@@ -172,7 +215,7 @@ function AppInner() {
                 await subscribe()
                 return
             }
-            if (pushPermission === 'default') {
+            if (!isSafari && pushPermission === 'default') {
                 const granted = await requestPermission()
                 if (granted) {
                     await subscribe()
@@ -181,7 +224,17 @@ function AppInner() {
         }
 
         void run()
-    }, [api, isPushSupported, pushPermission, requestPermission, subscribe, token])
+    }, [api, isPushSupported, isSafari, pushPermission, requestPermission, subscribe, token])
+
+    const enablePushNotifications = useCallback(async () => {
+        if (pushPermission === 'default') {
+            const granted = await requestPermission()
+            if (!granted) {
+                return false
+            }
+        }
+        return await subscribe()
+    }, [pushPermission, requestPermission, subscribe])
 
     const handleSseConnect = useCallback(() => {
         // Clear disconnected state on successful connection
@@ -229,7 +282,51 @@ function AppInner() {
         }
     }, [])
 
-    const handleSseEvent = useCallback(() => {}, [])
+    const showReadyNotification = useCallback((options: {
+        sessionId: string
+        title: string
+        body: string
+    }) => {
+        if (typeof Notification === 'undefined' || Notification.permission !== 'granted') {
+            return
+        }
+        const isVisible = typeof document !== 'undefined' && document.visibilityState === 'visible'
+        if (!isVisible && supportsPushSubscription && isPushSubscribed) {
+            return
+        }
+
+        const now = Date.now()
+        const last = readyNotificationTimesRef.current.get(options.sessionId) ?? 0
+        if (now - last < 5000) {
+            return
+        }
+        readyNotificationTimesRef.current.set(options.sessionId, now)
+
+        const notification = new Notification(options.title, {
+            body: options.body,
+            tag: `ready-${options.sessionId}`
+        })
+        notification.onclick = () => {
+            window.focus()
+            void router.navigate({
+                to: '/sessions/$sessionId',
+                params: { sessionId: options.sessionId }
+            })
+            notification.close()
+        }
+    }, [isPushSubscribed, router, supportsPushSubscription])
+
+    const handleSseEvent = useCallback((event: SyncEvent) => {
+        if (event.type !== 'message-received' || getMessageEventType(event) !== 'ready') {
+            return
+        }
+        showReadyNotification({
+            sessionId: event.sessionId,
+            title: t('notification.readyTitle'),
+            body: t('notification.readyBody')
+        })
+    }, [showReadyNotification, t])
+
     const handleToast = useCallback((event: ToastEvent) => {
         addToast({
             title: event.data.title,
@@ -237,7 +334,14 @@ function AppInner() {
             sessionId: event.data.sessionId,
             url: event.data.url
         })
-    }, [addToast])
+        if (event.data.title === 'Ready for input' && event.data.sessionId) {
+            showReadyNotification({
+                sessionId: event.data.sessionId,
+                title: event.data.title,
+                body: event.data.body
+            })
+        }
+    }, [addToast, showReadyNotification])
 
     const eventSubscription = useMemo(() => {
         if (selectedSessionId) {
@@ -355,6 +459,13 @@ function AppInner() {
                     <Outlet />
                 </div>
                 <ToastContainer />
+                <NotificationPrompt
+                    isSafari={isSafari}
+                    isSupported={isPushSupported}
+                    permission={pushPermission}
+                    isSubscribed={isPushSubscribed}
+                    onEnable={enablePushNotifications}
+                />
                 <InstallPrompt />
             </VoiceProvider>
         </AppContextProvider>

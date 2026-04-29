@@ -13,6 +13,7 @@ import { CopyIcon, CheckIcon, GitBranchIcon, FolderGit2Icon } from '@/components
 import { useTranslation } from '@/lib/use-translation'
 import { useToast } from '@/lib/toast-context'
 import { queryKeys } from '@/lib/query-keys'
+import { getSessionRowIndicator } from '@/lib/session-state'
 
 type SessionGroup = {
     key: string
@@ -183,6 +184,16 @@ function LoaderIcon(props: { className?: string }) {
             <line x1="18" y1="12" x2="22" y2="12" />
             <line x1="4.93" y1="19.07" x2="7.76" y2="16.24" />
             <line x1="16.24" y1="7.76" x2="19.07" y2="4.93" />
+        </svg>
+    )
+}
+
+function AlertTriangleIcon(props: { className?: string }) {
+    return (
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={props.className}>
+            <path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+            <path d="M12 9v4" />
+            <path d="M12 17h.01" />
         </svg>
     )
 }
@@ -404,6 +415,7 @@ function SessionItem(props: {
     const gitMetadata = useSessionGitMetadata(api, s).data
     const gitBranch = gitMetadata?.success ? gitMetadata.branch : s.metadata?.worktree?.branch
     const worktreeName = gitMetadata?.success ? gitMetadata.worktreeName : s.metadata?.worktree?.name
+    const rowIndicator = getSessionRowIndicator(s)
     return (
         <>
             <button
@@ -419,7 +431,9 @@ function SessionItem(props: {
                         <div className={`truncate text-sm font-medium ${s.active ? 'text-[var(--app-fg)]' : 'text-[var(--app-hint)]'}`}>
                             {sessionName}
                         </div>
-                        {s.active && s.thinking ? (
+                        {rowIndicator === 'waitingPermission' ? (
+                            <AlertTriangleIcon className="h-3.5 w-3.5 shrink-0 text-[var(--app-badge-warning-text)]" />
+                        ) : rowIndicator === 'processing' ? (
                             <LoaderIcon className="h-3.5 w-3.5 shrink-0 text-[var(--app-hint)] animate-spin-slow" />
                         ) : null}
                     </div>

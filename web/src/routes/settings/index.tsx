@@ -5,6 +5,8 @@ import { getElevenLabsSupportedLanguages, getLanguageDisplayName, type Language 
 import { getFontScaleOptions, useFontScale, type FontScale } from '@/hooks/useFontScale'
 import { getTerminalFontSizeOptions, useTerminalFontSize, type TerminalFontSize } from '@/hooks/useTerminalFontSize'
 import { useAppearance, getAppearanceOptions, type AppearancePreference } from '@/hooks/useTheme'
+import { usePushNotifications } from '@/hooks/usePushNotifications'
+import { useOptionalAppContext } from '@/lib/app-context'
 import { PROTOCOL_VERSION } from '@hapi/protocol'
 
 const locales: { value: Locale; nativeLabel: string }[] = [
@@ -79,6 +81,7 @@ export default function SettingsPage() {
     const [isFontOpen, setIsFontOpen] = useState(false)
     const [isTerminalFontOpen, setIsTerminalFontOpen] = useState(false)
     const [isVoiceOpen, setIsVoiceOpen] = useState(false)
+    const [isNotificationBusy, setIsNotificationBusy] = useState(false)
     const containerRef = useRef<HTMLDivElement>(null)
     const appearanceContainerRef = useRef<HTMLDivElement>(null)
     const fontContainerRef = useRef<HTMLDivElement>(null)
@@ -87,6 +90,16 @@ export default function SettingsPage() {
     const { fontScale, setFontScale } = useFontScale()
     const { terminalFontSize, setTerminalFontSize } = useTerminalFontSize()
     const { appearance, setAppearance } = useAppearance()
+    const appContext = useOptionalAppContext()
+    const {
+        isSupported: isPushSupported,
+        supportsPushSubscription,
+        permission: pushPermission,
+        isSubscribed: isPushSubscribed,
+        requestPermission,
+        subscribe,
+        unsubscribe
+    } = usePushNotifications(appContext?.api ?? null)
 
     // Voice language state - read from localStorage
     const [voiceLanguage, setVoiceLanguage] = useState<string | null>(() => {
@@ -101,6 +114,16 @@ export default function SettingsPage() {
     const currentFontScaleLabel = fontScaleOptions.find((opt) => opt.value === fontScale)?.label ?? '100%'
     const currentTerminalFontSizeLabel = terminalFontSizeOptions.find((opt) => opt.value === terminalFontSize)?.label ?? '13px'
     const currentVoiceLanguage = voiceLanguages.find((lang) => lang.code === voiceLanguage)
+    const notificationStatus = !isPushSupported
+        ? 'settings.notifications.unavailable'
+        : isPushSubscribed
+            ? 'settings.notifications.enabled'
+            : pushPermission === 'denied'
+                ? 'settings.notifications.blocked'
+                : 'settings.notifications.off'
+    const canEnableNotifications = isPushSupported && pushPermission !== 'denied'
+    const canDisableNotifications = isPushSubscribed && supportsPushSubscription && Boolean(appContext?.api)
+    const canToggleNotifications = isPushSubscribed ? canDisableNotifications : canEnableNotifications
 
     const handleLocaleChange = (newLocale: Locale) => {
         setLocale(newLocale)
@@ -130,6 +153,25 @@ export default function SettingsPage() {
             localStorage.setItem('hapi-voice-lang', language.code)
         }
         setIsVoiceOpen(false)
+    }
+
+    const handleNotificationToggle = async () => {
+        if (!canToggleNotifications || isNotificationBusy) return
+
+        setIsNotificationBusy(true)
+        try {
+            if (isPushSubscribed) {
+                await unsubscribe()
+                return
+            }
+            if (pushPermission === 'default') {
+                const granted = await requestPermission()
+                if (!granted) return
+            }
+            await subscribe()
+        } finally {
+            setIsNotificationBusy(false)
+        }
     }
 
     // Close dropdown when clicking outside
@@ -397,6 +439,33 @@ export default function SettingsPage() {
                                 </div>
                             )}
                         </div>
+                    </div>
+
+                    {/* Notifications section */}
+                    <div className="border-b border-[var(--app-divider)]">
+                        <div className="px-3 py-2 text-xs font-semibold text-[var(--app-hint)] uppercase tracking-wide">
+                            {t('settings.notifications.title')}
+                        </div>
+                        <button
+                            type="button"
+                            onClick={handleNotificationToggle}
+                            disabled={!canToggleNotifications || isNotificationBusy}
+                            className="flex w-full items-center justify-between px-3 py-3 text-left transition-colors enabled:hover:bg-[var(--app-subtle-bg)] disabled:cursor-default"
+                        >
+                            <span className="text-[var(--app-fg)]">{t('settings.notifications.sessionAlerts')}</span>
+                            <span className="flex items-center gap-3">
+                                <span className="text-[var(--app-hint)]">{t(notificationStatus)}</span>
+                                {canToggleNotifications ? (
+                                    <span className="text-sm font-medium text-[var(--app-link)]">
+                                        {isNotificationBusy
+                                            ? t('notification.enabling')
+                                            : isPushSubscribed
+                                                ? t('settings.notifications.disable')
+                                                : t('settings.notifications.enable')}
+                                    </span>
+                                ) : null}
+                            </span>
+                        </button>
                     </div>
 
                     {/* Voice Assistant section */}

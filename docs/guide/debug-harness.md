@@ -17,7 +17,7 @@ The preview harness starts a hub and runner with one shared `HAPI_HOME`.
 
 ```bash
 bun install
-bun run preview
+bun run harness-debug
 ```
 
 For a persistent trace directory:
@@ -32,7 +32,7 @@ For repeatable browser automation, keep the preview port and token stable:
 HAPI_HOME=/tmp/hapi-trace \
 HAPI_LISTEN_PORT=50533 \
 CLI_API_TOKEN=hapi-debug-token \
-bun run preview
+bun run harness-debug
 ```
 
 The command prints the local URL, token, combined preview log, and HAPI log directory. Keep the process running while Computer Use drives the browser.

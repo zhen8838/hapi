@@ -209,6 +209,7 @@ export class BackgroundTaskTracker {
             command: pending?.command,
             status: 'running',
             startedAt: now,
+            outputFile: typeof data.output_file === 'string' ? data.output_file : undefined,
         }
     }
 
@@ -252,6 +253,7 @@ export class BackgroundTaskTracker {
                 command: pending?.command,
                 status: 'running',
                 startedAt: now,
+                outputFile: extractOutputFile(text),
             }
         }
 
@@ -351,6 +353,10 @@ function extractToolResultText(block: Record<string, unknown>): string {
             .join('')
     }
     return ''
+}
+
+function extractOutputFile(text: string): string | undefined {
+    return text.match(/output_file:\s*(\S+)/)?.[1]
 }
 
 // --- Legacy compatibility ---

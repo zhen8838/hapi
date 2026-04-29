@@ -173,7 +173,6 @@ export function HappyComposer(props: {
     const api = useAssistantApi()
     const composerText = useAssistantState(({ composer }) => composer.text)
     const attachments = useAssistantState(({ composer }) => composer.attachments)
-    const threadIsRunning = useAssistantState(({ thread }) => thread.isRunning)
     const threadIsDisabled = useAssistantState(({ thread }) => thread.isDisabled)
 
     // Set initial text on mount
@@ -203,8 +202,11 @@ export function HappyComposer(props: {
         const path = (attachment as { path?: string }).path
         return typeof path === 'string' && path.length > 0
     })
-    const canSend = (hasText || hasAttachments) && attachmentsReady && !controlsDisabled && !threadIsRunning
-    const canQueue = (hasText || hasAttachments) && attachmentsReady && !controlsDisabled && threadIsRunning
+    const mainTurnRunning = Boolean(thinking)
+    const hasRunningBackgroundTasks = (backgroundTaskCount ?? 0) > 0
+    const canAbortRun = mainTurnRunning || hasRunningBackgroundTasks
+    const canSend = (hasText || hasAttachments) && attachmentsReady && !controlsDisabled && !mainTurnRunning
+    const canQueue = (hasText || hasAttachments) && attachmentsReady && !controlsDisabled && mainTurnRunning
 
     const [inputState, setInputState] = useState<TextInputState>({
         text: '',
@@ -317,7 +319,7 @@ export function HappyComposer(props: {
         haptic('light')
     }, [api, suggestions, inputState, autocompletePrefixes, haptic, agentFlavor])
 
-    const abortDisabled = controlsDisabled || isAborting || !threadIsRunning
+    const abortDisabled = controlsDisabled || isAborting || !canAbortRun
     const switchDisabled = controlsDisabled || isSwitching || !controlledByUser
     const showSwitchButton = Boolean(controlledByUser && onSwitchToRemote)
     const showTerminalButton = Boolean(onTerminal || terminalUnsupported)
@@ -326,9 +328,9 @@ export function HappyComposer(props: {
 
     useEffect(() => {
         if (!isAborting) return
-        if (threadIsRunning) return
+        if (canAbortRun) return
         setIsAborting(false)
-    }, [isAborting, threadIsRunning])
+    }, [canAbortRun, isAborting])
 
     useEffect(() => {
         if (!isSwitching) return
@@ -463,7 +465,7 @@ export function HappyComposer(props: {
             }
         }
 
-        if (key === 'Escape' && threadIsRunning) {
+        if (key === 'Escape' && canAbortRun) {
             e.preventDefault()
             handleAbort()
             return
@@ -484,7 +486,7 @@ export function HappyComposer(props: {
         moveDown,
         clearSuggestions,
         handleSuggestionSelect,
-        threadIsRunning,
+        canAbortRun,
         handleAbort,
         onPermissionModeChange,
         permissionMode,
@@ -621,7 +623,7 @@ export function HappyComposer(props: {
     }, [api, canQueue, canSend, enqueueCurrentComposer])
 
     useEffect(() => {
-        if (threadIsRunning) {
+        if (mainTurnRunning) {
             queueDispatchInFlightRef.current = false
             return
         }
@@ -636,7 +638,7 @@ export function HappyComposer(props: {
         queueDispatchInFlightRef.current = true
         setQueuedMessages((current) => current.slice(1))
         onQueuedSend(nextQueuedMessage.text, nextQueuedMessage.attachments)
-    }, [controlsDisabled, onQueuedSend, queuedMessages, threadIsRunning])
+    }, [controlsDisabled, mainTurnRunning, onQueuedSend, queuedMessages])
 
     const overlays = useMemo(() => {
         if (showSettings && (showCollaborationSettings || showPermissionSettings || showModelSettings || showModelReasoningEffortSettings || showEffortSettings)) {

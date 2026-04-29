@@ -1,5 +1,5 @@
 import { EnhancedMode, PermissionMode } from "./loop";
-import { query, type QueryOptions as Options, type SDKMessage, type SDKSystemMessage, AbortError, SDKUserMessage } from '@/claude/sdk'
+import { query, type QueryOptions as Options, type SDKAssistantMessage, type SDKMessage, type SDKSystemMessage, AbortError, SDKUserMessage } from '@/claude/sdk'
 import { claudeCheckSession } from "./utils/claudeCheckSession";
 import { join } from 'node:path';
 import { parseSpecialCommand } from "@/parsers/specialCommands";
@@ -166,6 +166,8 @@ export async function claudeRemote(opts: {
 
     // Track thinking state
     let thinking = false;
+    let releasedForegroundForBackground = false;
+    const backgroundTaskIds = new Set<string>();
     const updateThinking = (newThinking: boolean) => {
         if (thinking !== newThinking) {
             thinking = newThinking;
@@ -174,6 +176,28 @@ export async function claudeRemote(opts: {
                 opts.onThinkingChange(thinking);
             }
         }
+    };
+    const updateBackgroundTasks = (message: SDKMessage) => {
+        if (message.type !== 'system') return;
+
+        const subtype = typeof message.subtype === 'string' ? message.subtype : '';
+        const taskId = typeof message.task_id === 'string' ? message.task_id : null;
+        if (!taskId) return;
+
+        if (subtype === 'task_started') {
+            backgroundTaskIds.add(taskId);
+            return;
+        }
+
+        if (subtype === 'task_notification' && message.status === 'completed') {
+            backgroundTaskIds.delete(taskId);
+        }
+    };
+    const isTopLevelAssistantText = (message: SDKMessage) => {
+        if (message.type !== 'assistant') return false;
+        const assistant = message as SDKAssistantMessage;
+        if (assistant.parent_tool_use_id) return false;
+        return assistant.message.content.some((block) => block.type === 'text' && typeof block.text === 'string' && block.text.length > 0);
     };
 
     // Push initial message
@@ -223,6 +247,8 @@ export async function claudeRemote(opts: {
                     return;
                 }
                 mode = next.mode;
+                releasedForegroundForBackground = false;
+                updateThinking(true);
                 messages.push({ type: 'user', message: { role: 'user', content: next.message } });
                 logger.debug(
                     `${debugPrefix} nextMessage resolved fetchId=${fetchId} elapsedMs=${Date.now() - startedAt} ` +
@@ -258,6 +284,15 @@ export async function claudeRemote(opts: {
 
             // Handle messages
             opts.onMessage(message);
+            updateBackgroundTasks(message);
+
+            if (!releasedForegroundForBackground && backgroundTaskIds.size > 0 && isTopLevelAssistantText(message)) {
+                releasedForegroundForBackground = true;
+                updateThinking(false);
+                opts.onReady();
+                logger.debug(`${debugPrefix} foreground released while ${backgroundTaskIds.size} background task(s) continue`);
+                scheduleNextMessage();
+            }
 
             // Handle special system messages
             if (message.type === 'system' && message.subtype === 'init') {

@@ -32,19 +32,14 @@ export function BackgroundDetailWindow({
     const lastTopRunningIdRef = useRef<string | null>(null)
 
     const ordered = useMemo(() => orderBackgroundTasks(tasks), [tasks])
-    const hasRunningTasks = ordered.running.length > 0
-    const latestCompleted = useMemo(
-        () => hasRunningTasks && ordered.completed[0] ? [ordered.completed[0]] : [],
-        [hasRunningTasks, ordered.completed]
-    )
-    const historyTasks = useMemo(
-        () => hasRunningTasks ? ordered.completed.slice(1) : ordered.completed,
-        [hasRunningTasks, ordered.completed]
-    )
-    const visibleTasks = useMemo(() => [...ordered.running, ...latestCompleted], [latestCompleted, ordered.running])
+    const historyTasks = ordered.completed
+    const visibleTasks = ordered.running
     const active = tasks.find(t => t.id === activeTaskId) ?? visibleTasks[0] ?? historyTasks[0]
     const activeIsHistory = Boolean(active && historyTasks.some(t => t.id === active.id))
-    const showTabs = visibleTasks.length > 1 || historyTasks.length > 0
+    const showTabs = visibleTasks.length > 0 || historyTasks.length > 0
+    const historyTabLabel = activeIsHistory && active
+        ? truncate(active.description || active.command || active.id, 24)
+        : 'History'
 
     useEffect(() => {
         const firstRunning = ordered.running[0]?.id ?? null
@@ -88,65 +83,67 @@ export function BackgroundDetailWindow({
     return (
         <div className="relative mt-2 overflow-visible rounded-[20px] bg-[var(--app-secondary-bg)] text-xs">
             {showTabs ? (
-                <div className="flex overflow-x-auto rounded-t-[20px] border-b border-[var(--app-border)]">
-                    <div ref={historyRef} className="relative shrink-0">
-                        <button
-                            type="button"
-                            onClick={() => {
-                                if (historyTasks.length === 0) return
-                                setHistoryOpen(open => !open)
-                            }}
-                            disabled={historyTasks.length === 0}
-                            className={`h-full shrink-0 border-b-2 px-3 py-1.5 transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${
-                                activeIsHistory ? activeTabClass : inactiveTabClass
-                            }`}
-                        >
-                            History
-                            <span className="ml-1 text-[10px]">{historyOpen ? '▴' : '▾'}</span>
-                        </button>
-                        {historyOpen && historyTasks.length > 0 ? (
-                            <div className="absolute left-1 top-full z-30 mt-1 w-72 overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-secondary-bg)] py-1 shadow-xl">
-                                {historyTasks.map((task) => (
-                                    <button
-                                        key={task.id}
-                                        type="button"
-                                        onClick={() => {
-                                            setActiveTaskId(task.id)
-                                            setHistoryOpen(false)
-                                        }}
-                                        className={`flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-[var(--app-subtle-bg)] ${
-                                            task.id === active?.id ? 'text-[var(--app-fg)]' : 'text-[var(--app-hint)]'
-                                        }`}
-                                    >
-                                        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
-                                        <span className="min-w-0 flex-1 truncate">
-                                            {task.description || task.command || task.id}
-                                        </span>
-                                        <span className="shrink-0 text-[10px] opacity-75">
-                                            {formatTaskTime(task)}
-                                        </span>
-                                    </button>
-                                ))}
-                            </div>
-                        ) : null}
-                    </div>
+                <div ref={historyRef}>
+                    <div className="flex overflow-x-auto rounded-t-[20px] border-b border-[var(--app-border)]">
+                        <div className="relative shrink-0">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (historyTasks.length === 0) return
+                                    setHistoryOpen(open => !open)
+                                }}
+                                disabled={historyTasks.length === 0}
+                                className={`h-full shrink-0 border-b-2 px-3 py-1.5 transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${
+                                    activeIsHistory ? activeTabClass : inactiveTabClass
+                                }`}
+                            >
+                                {historyTabLabel}
+                                <span className="ml-1 text-[10px]">{historyOpen ? '▴' : '▾'}</span>
+                            </button>
+                        </div>
 
-                    {visibleTasks.map((task, i) => (
-                        <button
-                            key={task.id}
-                            type="button"
-                            onClick={() => {
-                                setActiveTaskId(task.id)
-                                setHistoryOpen(false)
-                            }}
-                            className={`shrink-0 border-b-2 px-3 py-1.5 transition-colors ${
-                                task.id === active?.id ? activeTabClass : inactiveTabClass
-                            }`}
-                        >
-                            <span className={`mr-1.5 inline-block h-1.5 w-1.5 rounded-full ${task.status === 'running' ? runningDotClass : 'bg-emerald-500'}`} />
-                            {truncate(task.description || task.command || `#${i + 1}`, 24)}
-                        </button>
-                    ))}
+                        {visibleTasks.map((task, i) => (
+                            <button
+                                key={task.id}
+                                type="button"
+                                onClick={() => {
+                                    setActiveTaskId(task.id)
+                                    setHistoryOpen(false)
+                                }}
+                                className={`shrink-0 border-b-2 px-3 py-1.5 transition-colors ${
+                                    task.id === active?.id ? activeTabClass : inactiveTabClass
+                                }`}
+                            >
+                                <span className={`mr-1.5 inline-block h-1.5 w-1.5 rounded-full ${task.status === 'running' ? runningDotClass : 'bg-emerald-500'}`} />
+                                {truncate(task.description || task.command || `#${i + 1}`, 24)}
+                            </button>
+                        ))}
+                    </div>
+                    {historyOpen && historyTasks.length > 0 ? (
+                        <div className="absolute left-1 top-8 z-30 mt-1 w-72 overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-secondary-bg)] py-1 shadow-xl">
+                            {historyTasks.map((task) => (
+                                <button
+                                    key={task.id}
+                                    type="button"
+                                    onClick={() => {
+                                        setActiveTaskId(task.id)
+                                        setHistoryOpen(false)
+                                    }}
+                                    className={`flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-[var(--app-subtle-bg)] ${
+                                        task.id === active?.id ? 'text-[var(--app-fg)]' : 'text-[var(--app-hint)]'
+                                    }`}
+                                >
+                                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
+                                    <span className="min-w-0 flex-1 truncate">
+                                        {task.description || task.command || task.id}
+                                    </span>
+                                    <span className="shrink-0 text-[10px] opacity-75">
+                                        {formatTaskTime(task)}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+                    ) : null}
                 </div>
             ) : null}
 

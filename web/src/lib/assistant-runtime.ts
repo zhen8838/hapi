@@ -177,7 +177,7 @@ export function useHappyRuntime(props: {
     attachmentAdapter?: AttachmentAdapter
     allowSendWhenInactive?: boolean
 }) {
-    const isMainTurnRunning = props.session.thinking && (props.session.backgroundTaskCount ?? 0) === 0
+    const isMainTurnRunning = props.session.thinking
 
     // Use cached message converter for performance optimization
     // This prevents re-converting all messages on every render

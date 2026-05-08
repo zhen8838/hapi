@@ -18,6 +18,11 @@ import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import { CopyIcon, CheckIcon } from '@/components/icons'
 
 import type { MarkdownTextPrimitiveProps } from '@assistant-ui/react-markdown'
+export function preprocessMarkdownMath(text: string): string {
+    return text
+        .replace(/\\\[((?:.|\n)*?)\\\]/g, (_match, body: string) => `$$\n${body.trim()}\n$$`)
+        .replace(/\\\((.*?)\\\)/gs, (_match, body: string) => `$${body.trim()}$`)
+}
 
 export const MARKDOWN_PLUGINS = [remarkGfm, remarkMath, remarkDisableIndentedCode] satisfies NonNullable<MarkdownTextPrimitiveProps['remarkPlugins']>
 // Security: rehype-raw allows raw HTML passthrough from LLM output (trusted).
@@ -243,6 +248,7 @@ export function MarkdownText() {
         <MarkdownTextPrimitive
             remarkPlugins={MARKDOWN_PLUGINS}
             rehypePlugins={MARKDOWN_REHYPE_PLUGINS}
+            preprocess={preprocessMarkdownMath}
             components={defaultComponents}
             componentsByLanguage={COMPONENTS_BY_LANGUAGE}
             className={cn('aui-md min-w-0 max-w-full break-words text-base')}

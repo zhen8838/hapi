@@ -1,6 +1,6 @@
 import type { ComponentPropsWithoutRef, ReactNode } from 'react'
 import ReactMarkdown, { type Components } from 'react-markdown'
-import { MARKDOWN_PLUGINS, MARKDOWN_REHYPE_PLUGINS } from '@/components/assistant-ui/markdown-text'
+import { MARKDOWN_PLUGINS, MARKDOWN_REHYPE_PLUGINS, preprocessMarkdownMath } from '@/components/assistant-ui/markdown-text'
 import { CodeBlock } from '@/components/CodeBlock'
 import { MermaidDiagram } from '@/components/MermaidDiagram'
 import { PlantUMLDiagram } from '@/components/PlantUMLDiagram'
@@ -113,7 +113,7 @@ function MarkdownContent(props: MarkdownRendererProps) {
                 rehypePlugins={MARKDOWN_REHYPE_PLUGINS}
                 components={mergedComponents}
             >
-                {props.content}
+                {preprocessMarkdownMath(props.content)}
             </ReactMarkdown>
         </div>
     )

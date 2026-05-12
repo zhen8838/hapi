@@ -202,8 +202,7 @@ export function HappyComposer(props: {
         return typeof path === 'string' && path.length > 0
     })
     const mainTurnRunning = isMainAgentTurnInFlight(mainAgentState)
-    const hasRunningBackgroundTasks = (backgroundTaskCount ?? 0) > 0
-    const canAbortRun = mainTurnRunning || hasRunningBackgroundTasks
+    const canAbortRun = mainTurnRunning || (backgroundTaskCount ?? 0) > 0
     const canSend = (hasText || hasAttachments) && attachmentsReady && !controlsDisabled && !mainTurnRunning
     const canQueue = (hasText || hasAttachments) && attachmentsReady && !controlsDisabled && mainTurnRunning
 

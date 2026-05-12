@@ -19,6 +19,38 @@ function codexOutput(data: unknown) {
     return { role: 'agent', content: { type: 'output', data } }
 }
 
+function assistantWithToolUse(id: string, name: string, input: Record<string, unknown>) {
+    return {
+        role: 'agent',
+        content: {
+            type: 'output',
+            data: {
+                type: 'assistant',
+                message: {
+                    role: 'assistant',
+                    content: [{ type: 'tool_use', id, name, input }]
+                }
+            }
+        }
+    }
+}
+
+function userWithToolResult(toolUseId: string, content: string) {
+    return {
+        role: 'agent',
+        content: {
+            type: 'output',
+            data: {
+                type: 'user',
+                message: {
+                    role: 'user',
+                    content: [{ type: 'tool_result', tool_use_id: toolUseId, content }]
+                }
+            }
+        }
+    }
+}
+
 describe('session model', () => {
     it('includes explicit model in session summaries', () => {
         const store = new Store(':memory:')
@@ -100,6 +132,48 @@ describe('session model', () => {
             type: 'agent',
             description: 'Inspect Codex support',
             status: 'completed',
+        })
+    })
+
+    it('does not resurrect running background tasks after session end', () => {
+        const store = new Store(':memory:')
+        const events: SyncEvent[] = []
+        const cache = new SessionCache(store, createPublisher(events))
+
+        const session = cache.getOrCreateSession(
+            'session-background-stop-recovery',
+            { path: '/tmp/project', host: 'localhost', flavor: 'claude' },
+            null,
+            'default'
+        )
+
+        cache.handleSessionAlive({
+            sid: session.id,
+            time: Date.now(),
+            thinking: true
+        })
+
+        store.messages.addMessage(session.id, assistantWithToolUse('toolu_1', 'Bash', {
+            command: 'sleep 100',
+            run_in_background: true,
+            description: 'Long task'
+        }))
+        store.messages.addMessage(session.id, userWithToolResult('toolu_1', 'Command running in background with ID: bg-1'))
+
+        const active = cache.refreshSession(session.id)
+        expect(active?.backgroundTaskCount).toBe(1)
+        expect(active?.backgroundTasks?.[0]).toMatchObject({
+            id: 'bg-1',
+            status: 'running'
+        })
+
+        cache.handleSessionEnd({ sid: session.id, time: Date.now() })
+
+        const recovered = cache.refreshSession(session.id)
+        expect(recovered?.backgroundTaskCount).toBe(0)
+        expect(recovered?.backgroundTasks?.[0]).toMatchObject({
+            id: 'bg-1',
+            status: 'completed'
         })
     })
 

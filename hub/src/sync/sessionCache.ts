@@ -133,8 +133,13 @@ export class SessionCache {
             return parsed.success ? parsed.data : undefined
         })()
 
+        const active = existing?.active ?? stored.active
+        const activeAt = existing?.activeAt ?? (stored.activeAt ?? stored.createdAt)
         const recoveredBackgroundTasks = this.recoverBackgroundTasks(sessionId, metadata?.flavor)
-        const backgroundTasks = mergeBackgroundTasks(existing?.backgroundTasks, recoveredBackgroundTasks)
+        const mergedBackgroundTasks = mergeBackgroundTasks(existing?.backgroundTasks, recoveredBackgroundTasks)
+        const backgroundTasks = active
+            ? mergedBackgroundTasks
+            : completeRunningBackgroundTasks(mergedBackgroundTasks, activeAt)
 
         const session: Session = {
             id: stored.id,
@@ -142,15 +147,15 @@ export class SessionCache {
             seq: stored.seq,
             createdAt: stored.createdAt,
             updatedAt: stored.updatedAt,
-            active: existing?.active ?? stored.active,
-            activeAt: existing?.activeAt ?? (stored.activeAt ?? stored.createdAt),
+            active,
+            activeAt,
             metadata,
             metadataVersion: stored.metadataVersion,
             agentState,
             agentStateVersion: stored.agentStateVersion,
             thinking: existing?.thinking ?? false,
             thinkingAt: existing?.thinkingAt ?? 0,
-            backgroundTaskCount: existing?.backgroundTaskCount ?? backgroundTasks.filter(t => t.status === 'running').length,
+            backgroundTaskCount: backgroundTasks.filter(t => t.status === 'running').length,
             backgroundTasks,
             todos,
             teamState,
@@ -558,6 +563,13 @@ export class SessionCache {
             )
         }
 
+        const oldCached = this.sessions.get(oldSessionId)
+        const newCached = this.sessions.get(newSessionId)
+        if (oldCached?.backgroundTasks && newCached) {
+            newCached.backgroundTasks = mergeBackgroundTasks(newCached.backgroundTasks, oldCached.backgroundTasks)
+            newCached.backgroundTaskCount = newCached.backgroundTasks.filter(task => task.status === 'running').length
+        }
+
         const deleted = this.store.sessions.deleteSession(oldSessionId, namespace)
         if (!deleted) {
             throw new Error('Failed to delete old session during merge')
@@ -668,4 +680,12 @@ function mergeBackgroundTasks(existing: BackgroundTask[] | undefined, recovered:
     }
 
     return [...byId.values()]
+}
+
+function completeRunningBackgroundTasks(tasks: BackgroundTask[], completedAt: number): BackgroundTask[] {
+    return tasks.map(task => (
+        task.status === 'running'
+            ? { ...task, status: 'completed', completedAt }
+            : task
+    ))
 }

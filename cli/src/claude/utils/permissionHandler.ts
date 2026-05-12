@@ -101,7 +101,6 @@ function formatAskUserQuestionAnswers(answers: Record<string, string[]> | Record
 }
 
 function buildAskUserQuestionUpdatedInput(input: unknown, answers: Record<string, string[]> | Record<string, { answers: string[] }>): Record<string, unknown> {
-    // Normalize to flat format for AskUserQuestion
     const flatAnswers: Record<string, string[]> = {};
     for (const [key, value] of Object.entries(answers)) {
         if (Array.isArray(value)) {
@@ -111,13 +110,33 @@ function buildAskUserQuestionUpdatedInput(input: unknown, answers: Record<string
         }
     }
 
+    const questions = (() => {
+        if (!isObject(input)) return null;
+        const raw = input.questions;
+        if (!Array.isArray(raw)) return null;
+        return raw.filter((q) => isObject(q));
+    })();
+
+    const answerStrings: Record<string, string> = {};
+    for (const [key, value] of Object.entries(flatAnswers)) {
+        const idx = Number.parseInt(key, 10);
+        const q = questions && Number.isFinite(idx) ? questions[idx] : null;
+        const answerKey = q && typeof q.question === 'string' && q.question.trim().length > 0
+            ? q.question.trim()
+            : key;
+        answerStrings[answerKey] = value
+            .map((v) => String(v).trim())
+            .filter((v) => v.length > 0)
+            .join(', ');
+    }
+
     if (!isObject(input)) {
-        return { answers: flatAnswers };
+        return { answers: answerStrings };
     }
 
     return {
         ...input,
-        answers: flatAnswers
+        answers: answerStrings
     };
 }
 
